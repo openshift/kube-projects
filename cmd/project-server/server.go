@@ -1,13 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"runtime"
 
 	"k8s.io/kubernetes/pkg/util/logs"
 
-	// "github.com/openshift/origin/pkg/cmd/util/serviceability"
+	"github.com/openshift/kube-projects/pkg/cmd/server"
 
 	// install all APIs
 	_ "github.com/openshift/kube-projects/pkg/apis/project/install"
@@ -24,5 +23,8 @@ func main() {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
 
-	fmt.Printf("Starting")
+	cmd := server.NewCommandStartProjectServer(os.Stdout)
+	if err := cmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }
