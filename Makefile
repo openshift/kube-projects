@@ -60,18 +60,6 @@ check: | build verify
 #   make verify
 verify: build
 	# build-tests is disabled until we can determine why memory usage is so high
-	hack/verify-upstream-commits.sh
-	hack/verify-gofmt.sh
-	hack/verify-govet.sh
-	hack/verify-generated-bootstrap-bindata.sh
-	hack/verify-generated-deep-copies.sh
-	hack/verify-generated-conversions.sh
-	hack/verify-generated-clientsets.sh
-	hack/verify-generated-completions.sh
-	hack/verify-generated-docs.sh
-	PROTO_OPTIONAL=1 hack/verify-generated-protobuf.sh
-	hack/verify-generated-swagger-descriptions.sh
-	hack/verify-generated-swagger-spec.sh
 .PHONY: verify
 
 # Update all generated artifacts.
@@ -79,14 +67,6 @@ verify: build
 # Example:
 #   make update
 update: build
-	hack/update-generated-deep-copies.sh
-	hack/update-generated-conversions.sh
-	hack/update-generated-clientsets.sh
-	hack/update-generated-completions.sh
-	hack/update-generated-docs.sh
-	PROTO_OPTIONAL=1 hack/update-generated-protobuf.sh
-	hack/update-generated-swagger-descriptions.sh
-	hack/update-generated-swagger-spec.sh
 .PHONY: update
 
 # Run unit tests.
@@ -102,7 +82,7 @@ update: build
 #   make test-unit
 #   make test-unit WHAT=pkg/build TESTFLAGS=-v
 test-unit:
-	TEST_KUBE=true GOTEST_FLAGS="$(TESTFLAGS)" hack/test-go.sh $(WHAT) $(TESTS)
+	GOTEST_FLAGS="$(TESTFLAGS)" hack/test-go.sh $(WHAT) $(TESTS)
 .PHONY: test-unit
 
 # Run integration tests. Compiles its own tests, cannot be run
