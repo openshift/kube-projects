@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/coreos/go-systemd/daemon"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 
+	"k8s.io/kubernetes/pkg/genericapiserver"
 	kcmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	// "k8s.io/kubernetes/pkg/genericapiserver"
+
+	"github.com/openshift/kube-projects/pkg/apiserver"
 )
 
 type ProjectServerOptions struct {
@@ -70,10 +71,7 @@ func (o ProjectServerOptions) RunProjectServer() error {
 		return nil
 	}
 
-	// TODO: this should be encapsulated by RunMaster, but StartAllInOne has no
-	// way to communicate whether RunMaster should block.
-	go daemon.SdNotify("READY=1")
-	select {}
+	return nil
 }
 
 // RunServer will eventually take the options and:
@@ -193,5 +191,15 @@ type ProjectServer struct {
 // Start launches a master. It will error if possible, but some background processes may still
 // be running and the process should exit after it finishes.
 func (m *ProjectServer) Start() error {
+	genericAPIServerConfig := genericapiserver.NewConfig()
+	config := apiserver.Config{
+		GenericConfig: genericAPIServerConfig,
+	}
+
+	server, err := config.Complete().New()
+	if err != nil {
+		return err
+	}
+	server.GenericAPIServer.Run()
 	return nil
 }
