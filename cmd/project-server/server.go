@@ -9,7 +9,7 @@ import (
 	"github.com/openshift/kube-projects/pkg/cmd/server"
 
 	// install all APIs
-	_ "github.com/openshift/kube-projects/pkg/apis/project/install"
+	_ "github.com/openshift/kube-projects/pkg/project/api/install"
 	_ "k8s.io/kubernetes/pkg/api/install"
 )
 
