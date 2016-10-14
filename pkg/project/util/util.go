@@ -7,7 +7,7 @@ import (
 )
 
 // ConvertNamespace transforms a Namespace into a Project
-func ConvertNamespace(namespace *kapi.Namespace) *api.Project {
+func ConvertNamespace(namespace *kapi.Namespace) *projectapi.Project {
 	return &projectapi.Project{
 		ObjectMeta: namespace.ObjectMeta,
 		Spec: projectapi.ProjectSpec{

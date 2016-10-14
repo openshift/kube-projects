@@ -8,18 +8,14 @@ import (
 
 	kapi "k8s.io/kubernetes/pkg/api"
 	kapierror "k8s.io/kubernetes/pkg/api/errors"
-	"k8s.io/kubernetes/pkg/apis/rbac"
-
-	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/api/rest"
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	authorizationapi "k8s.io/kubernetes/pkg/apis/authorization"
+	"k8s.io/kubernetes/pkg/apis/rbac"
 	"k8s.io/kubernetes/pkg/auth/authorizer"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	kclient "k8s.io/kubernetes/pkg/client/unversioned"
-	"k8s.io/kubernetes/pkg/kubectl/resource"
 	"k8s.io/kubernetes/pkg/runtime"
-	utilerrors "k8s.io/kubernetes/pkg/util/errors"
 	utilruntime "k8s.io/kubernetes/pkg/util/runtime"
 	"k8s.io/kubernetes/pkg/util/wait"
 
@@ -90,19 +86,19 @@ func (r *REST) Create(ctx kapi.Context, obj runtime.Object) (runtime.Object, err
 	binding.Namespace = ns
 	binding.Subjects = []rbac.Subject{{Kind: rbac.UserKind, Name: username}}
 	binding.RoleRef.Name = "admin"
-	if _, err := r.privilegedKubeClient.Rbac().RoleBindings().Create(binding); err != nil {
+	if _, err := r.privilegedKubeClient.Rbac().RoleBindings(ns).Create(binding); err != nil {
 		utilruntime.HandleError(fmt.Errorf("error rolebinding in %q: %v", projectRequest.Name, err))
 		return nil, kapierror.NewInternalError(err)
 	}
 
-	r.waitForRoleBinding(projectName, lastRoleBinding.Name)
+	r.waitForAccess(ns, username)
 
 	return projectutil.ConvertNamespace(resultingNamespace), nil
 }
 
 // waitForAccess blocks until the apiserver says the user has access to the namespace
 func (r *REST) waitForAccess(namespace, username string) {
-	sar := authorizationapi.SubjectAccessReview{
+	sar := &authorizationapi.SubjectAccessReview{
 		Spec: authorizationapi.SubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationapi.ResourceAttributes{
 				Namespace: namespace,
@@ -130,7 +126,7 @@ func (r *REST) waitForAccess(namespace, username string) {
 	})
 
 	if err != nil {
-		glog.V(4).Infof("authorization cache failed to update for %v %v: %v", namespace, name, err)
+		glog.V(4).Infof("authorization cache failed to update for %v %v: %v", namespace, username, err)
 	}
 }
 
@@ -143,7 +139,7 @@ func (r *REST) List(ctx kapi.Context, options *kapi.ListOptions) (runtime.Object
 	}
 
 	accessCheck := authorizer.AttributesRecord{
-		User:            attributes.GetUserInfo(),
+		User:            userInfo,
 		Verb:            "create",
 		Namespace:       "",
 		APIGroup:        projectapi.GroupName,
@@ -153,7 +149,7 @@ func (r *REST) List(ctx kapi.Context, options *kapi.ListOptions) (runtime.Object
 		ResourceRequest: true,
 		Path:            "",
 	}
-	allowed, _, _ := a.authorizer.Authorize(accessCheck)
+	allowed, _, _ := r.authorizer.Authorize(accessCheck)
 	if allowed {
 		return &unversioned.Status{Status: unversioned.StatusSuccess}, nil
 	}

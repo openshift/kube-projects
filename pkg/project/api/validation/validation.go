@@ -29,7 +29,6 @@ func ValidateProject(project *api.Project) field.ErrorList {
 		result = append(result, field.Invalid(field.NewPath("metadata", "annotations").Key(projectapi.ProjectDisplayName),
 			project.Annotations[projectapi.ProjectDisplayName], "may not contain a new line or tab"))
 	}
-	result = append(result, validateNodeSelector(project)...)
 	return result
 }
 

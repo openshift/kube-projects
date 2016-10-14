@@ -346,6 +346,10 @@
 			"Rev": "fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a"
 		},
 		{
+			"ImportPath": "github.com/mitchellh/mapstructure",
+			"Rev": "740c764bc6149d3f1806231418adb9f52c11bcbf"
+		},
+		{
 			"ImportPath": "github.com/pborman/uuid",
 			"Rev": "ca53cad383cad2479bbba7f7a1a05797ec1386e4"
 		},
@@ -374,6 +378,51 @@
 		{
 			"ImportPath": "github.com/prometheus/procfs",
 			"Rev": "454a56f35412459b5e684fd5ec0f9211b94f002a"
+		},
+		{
+			"ImportPath": "github.com/rackspace/gophercloud",
+			"Comment": "v1.0.0-920-g934dbf8",
+			"Rev": "934dbf81977c67c521c75492dc1f55ca74dc5b04"
+		},
+		{
+			"ImportPath": "github.com/rackspace/gophercloud/openstack",
+			"Comment": "v1.0.0-920-g934dbf8",
+			"Rev": "934dbf81977c67c521c75492dc1f55ca74dc5b04"
+		},
+		{
+			"ImportPath": "github.com/rackspace/gophercloud/openstack/identity/v2/tenants",
+			"Comment": "v1.0.0-920-g934dbf8",
+			"Rev": "934dbf81977c67c521c75492dc1f55ca74dc5b04"
+		},
+		{
+			"ImportPath": "github.com/rackspace/gophercloud/openstack/identity/v2/tokens",
+			"Comment": "v1.0.0-920-g934dbf8",
+			"Rev": "934dbf81977c67c521c75492dc1f55ca74dc5b04"
+		},
+		{
+			"ImportPath": "github.com/rackspace/gophercloud/openstack/identity/v3/tokens",
+			"Comment": "v1.0.0-920-g934dbf8",
+			"Rev": "934dbf81977c67c521c75492dc1f55ca74dc5b04"
+		},
+		{
+			"ImportPath": "github.com/rackspace/gophercloud/openstack/utils",
+			"Comment": "v1.0.0-920-g934dbf8",
+			"Rev": "934dbf81977c67c521c75492dc1f55ca74dc5b04"
+		},
+		{
+			"ImportPath": "github.com/rackspace/gophercloud/pagination",
+			"Comment": "v1.0.0-920-g934dbf8",
+			"Rev": "934dbf81977c67c521c75492dc1f55ca74dc5b04"
+		},
+		{
+			"ImportPath": "github.com/rackspace/gophercloud/testhelper",
+			"Comment": "v1.0.0-920-g934dbf8",
+			"Rev": "934dbf81977c67c521c75492dc1f55ca74dc5b04"
+		},
+		{
+			"ImportPath": "github.com/rackspace/gophercloud/testhelper/client",
+			"Comment": "v1.0.0-920-g934dbf8",
+			"Rev": "934dbf81977c67c521c75492dc1f55ca74dc5b04"
 		},
 		{
 			"ImportPath": "github.com/spf13/cobra",
@@ -982,6 +1031,11 @@
 			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
 		},
 		{
+			"ImportPath": "k8s.io/kubernetes/pkg/apiserver/authenticator",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
 			"ImportPath": "k8s.io/kubernetes/pkg/apiserver/filters",
 			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
 			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
@@ -1002,7 +1056,17 @@
 			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
 		},
 		{
+			"ImportPath": "k8s.io/kubernetes/pkg/auth/authenticator/bearertoken",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
 			"ImportPath": "k8s.io/kubernetes/pkg/auth/authorizer",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/auth/group",
 			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
 			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
 		},
@@ -1622,6 +1686,61 @@
 			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
 		},
 		{
+			"ImportPath": "k8s.io/kubernetes/plugin/pkg/auth/authenticator/password/keystone",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/plugin/pkg/auth/authenticator/password/passwordfile",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/anonymous",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/basicauth",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/union",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/x509",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/plugin/pkg/auth/authenticator/token/anytoken",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/plugin/pkg/auth/authenticator/token/oidc",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/plugin/pkg/auth/authenticator/token/tokenfile",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/plugin/pkg/auth/authenticator/token/webhook",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/plugin/pkg/auth/authorizer/webhook",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
 			"ImportPath": "k8s.io/kubernetes/plugin/pkg/client/auth",
 			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
 			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
@@ -1633,6 +1752,11 @@
 		},
 		{
 			"ImportPath": "k8s.io/kubernetes/plugin/pkg/client/auth/oidc",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/plugin/pkg/webhook",
 			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
 			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
 		},
