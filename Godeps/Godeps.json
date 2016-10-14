@@ -3,6 +3,7 @@
 	"GoVersion": "go1.7",
 	"GodepVersion": "v74",
 	"Packages": [
+		"github.com/ugorji/go/codec/codecgen",
 		"./..."
 	],
 	"Deps": [
@@ -383,6 +384,10 @@
 		},
 		{
 			"ImportPath": "github.com/ugorji/go/codec",
+			"Rev": "f1f1a805ed361a0e078bb537e4ea78cd37dcf065"
+		},
+		{
+			"ImportPath": "github.com/ugorji/go/codec/codecgen",
 			"Rev": "f1f1a805ed361a0e078bb537e4ea78cd37dcf065"
 		},
 		{
