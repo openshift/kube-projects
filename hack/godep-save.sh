@@ -8,6 +8,7 @@ source "$(dirname "${BASH_SOURCE}")/lib/init.sh"
 
 REQUIRED_BINS=(
   "github.com/ugorji/go/codec/codecgen"
+  "k8s.io/kubernetes/cmd/libs/go2idl/client-gen"
   "./..."
 )
 
