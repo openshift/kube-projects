@@ -23,6 +23,7 @@ import (
 	authenticationunion "k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/union"
 	"k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/x509"
 	authenticationwebhook "k8s.io/kubernetes/plugin/pkg/auth/authenticator/token/webhook"
+	authorizationwebhook "k8s.io/kubernetes/plugin/pkg/auth/authorizer/webhook"
 
 	"github.com/openshift/kube-projects/pkg/apiserver"
 )
@@ -67,6 +68,8 @@ func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
 	// autocompletion hints
 	cmd.MarkFlagFilename("write-config")
 	cmd.MarkFlagFilename("config", "yaml", "yml")
+
+	GLog(cmd.PersistentFlags())
 
 	return cmd
 }
@@ -242,6 +245,10 @@ func (s *ProjectServer) Start() error {
 		return err
 	}
 	genericAPIServerConfig.Authenticator, err = NewAuthenticator(s.servingInfo.ClientCA, clientset)
+	if err != nil {
+		return err
+	}
+	genericAPIServerConfig.Authorizer, err = authorizationwebhook.NewFromInterface(clientset.Authorization().SubjectAccessReviews(), 30*time.Second, 30*time.Second)
 	if err != nil {
 		return err
 	}
