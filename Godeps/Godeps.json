@@ -1102,12 +1102,22 @@
 			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
 		},
 		{
+			"ImportPath": "k8s.io/kubernetes/pkg/client/testing/core",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
 			"ImportPath": "k8s.io/kubernetes/pkg/client/transport",
 			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
 			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
 		},
 		{
 			"ImportPath": "k8s.io/kubernetes/pkg/client/typed/discovery",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/pkg/client/typed/discovery/fake",
 			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
 			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
 		},
