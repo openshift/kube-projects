@@ -3,7 +3,6 @@ package apiserver
 import (
 	// _ "k8s.io/kubernetes/pkg/api"
 	// _ "k8s.io/kubernetes/pkg/api/rest"
-	// _ "k8s.io/kubernetes/pkg/apis/rbac"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/genericapiserver"
 )
