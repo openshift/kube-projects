@@ -2,9 +2,13 @@ package apiserver
 
 import (
 	// _ "k8s.io/kubernetes/pkg/api"
-	// _ "k8s.io/kubernetes/pkg/api/rest"
+	"k8s.io/kubernetes/pkg/api/rest"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/genericapiserver"
+
+	projectapi "github.com/openshift/kube-projects/pkg/project/api"
+	projectapiv1 "github.com/openshift/kube-projects/pkg/project/api/v1"
+	projectrequeststorage "github.com/openshift/kube-projects/pkg/project/registry/projectrequest"
 )
 
 type Config struct {
@@ -49,11 +53,16 @@ func (c completedConfig) New() (*ProjectServer, error) {
 		GenericAPIServer: s,
 	}
 
-	if false {
-		apiGroupInfo := &genericapiserver.APIGroupInfo{}
-		if err := m.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
-			return nil, err
-		}
+	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(projectapi.GroupName)
+	apiGroupInfo.GroupMeta.GroupVersion = projectapiv1.SchemeGroupVersion
+
+	v1storage := map[string]rest.Storage{}
+	v1storage["projectrequests"] = projectrequeststorage.NewREST("", c.Config.GenericConfig.Authorizer, c.PrivilegedKubeClient)
+
+	apiGroupInfo.VersionedResourcesStorageMap[projectapiv1.SchemeGroupVersion.Version] = v1storage
+
+	if err := m.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {
+		return nil, err
 	}
 
 	return m, nil

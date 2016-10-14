@@ -4,12 +4,14 @@ import (
 	"github.com/openshift/kube-projects/pkg/project/api"
 	"github.com/openshift/kube-projects/pkg/project/api/v1"
 	"k8s.io/kubernetes/pkg/apimachinery/announced"
+	"k8s.io/kubernetes/pkg/util/sets"
 )
 
 func init() {
 	if err := announced.NewGroupMetaFactory(
 		&announced.GroupMetaFactoryArgs{
 			GroupName:                  api.GroupName,
+			RootScopedKinds:            sets.NewString("ProjectRequest"),
 			VersionPreferenceOrder:     []string{v1.SchemeGroupVersion.Version},
 			ImportPrefix:               "github.com/openshift/kube-projects/pkg/project/api",
 			AddInternalObjectsToScheme: api.AddToScheme,

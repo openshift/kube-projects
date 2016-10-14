@@ -3,6 +3,8 @@ package server
 import (
 	"fmt"
 	"io"
+	"net"
+	"path"
 
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
@@ -12,6 +14,8 @@ import (
 
 	"github.com/openshift/kube-projects/pkg/apiserver"
 )
+
+const defaultConfigDir = "openshift.local.config/project-server"
 
 type ProjectServerOptions struct {
 	StdOut io.Writer
@@ -89,6 +93,16 @@ func (o ProjectServerOptions) RunServer() error {
 		}
 	}
 
+	secureServingInfo := genericapiserver.ServingInfo{
+		BindAddress: net.JoinHostPort("0.0.0.0", "8444"),
+		ServerCert: genericapiserver.CertInfo{
+			Generate: true,
+			CertFile: path.Join(defaultConfigDir, "apiserver.crt"),
+			KeyFile:  path.Join(defaultConfigDir, "apiserver.key"),
+		},
+		ClientCA: "",
+	}
+
 	// var masterConfig *configapi.MasterConfig
 	// var err error
 	// if startUsingConfigFile {
@@ -137,7 +151,9 @@ func (o ProjectServerOptions) RunServer() error {
 	// 	return nil
 	// }
 
-	m := &ProjectServer{}
+	m := &ProjectServer{
+		servingInfo: secureServingInfo,
+	}
 	return m.Start()
 }
 
@@ -186,14 +202,21 @@ func (o ProjectServerOptions) IsRunFromConfig() bool {
 
 // ProjectServer encapsulates starting the components of the master
 type ProjectServer struct {
+	// this should be part of the serializeable config
+	servingInfo genericapiserver.ServingInfo
 }
 
 // Start launches a master. It will error if possible, but some background processes may still
 // be running and the process should exit after it finishes.
 func (m *ProjectServer) Start() error {
-	genericAPIServerConfig := genericapiserver.NewConfig()
+	genericAPIServerConfig := genericapiserver.NewConfig().Complete()
+	genericAPIServerConfig.SecureServingInfo = &m.servingInfo
+	if err := genericAPIServerConfig.MaybeGenerateServingCerts(); err != nil {
+		return err
+	}
+
 	config := apiserver.Config{
-		GenericConfig: genericAPIServerConfig,
+		GenericConfig: genericAPIServerConfig.Config,
 	}
 
 	server, err := config.Complete().New()
