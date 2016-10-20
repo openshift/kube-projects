@@ -32,8 +32,10 @@ func DeepCopy_api_Project(in interface{}, out interface{}, c *conversion.Cloner)
 		in := in.(*Project)
 		out := out.(*Project)
 		out.TypeMeta = in.TypeMeta
-		if err := pkg_api.DeepCopy_api_ObjectMeta(&in.ObjectMeta, &out.ObjectMeta, c); err != nil {
+		if newVal, err := c.DeepCopy(&in.ObjectMeta); err != nil {
 			return err
+		} else {
+			out.ObjectMeta = *newVal.(*pkg_api.ObjectMeta)
 		}
 		if err := DeepCopy_api_ProjectSpec(&in.Spec, &out.Spec, c); err != nil {
 			return err
@@ -69,8 +71,10 @@ func DeepCopy_api_ProjectRequest(in interface{}, out interface{}, c *conversion.
 		in := in.(*ProjectRequest)
 		out := out.(*ProjectRequest)
 		out.TypeMeta = in.TypeMeta
-		if err := pkg_api.DeepCopy_api_ObjectMeta(&in.ObjectMeta, &out.ObjectMeta, c); err != nil {
+		if newVal, err := c.DeepCopy(&in.ObjectMeta); err != nil {
 			return err
+		} else {
+			out.ObjectMeta = *newVal.(*pkg_api.ObjectMeta)
 		}
 		out.DisplayName = in.DisplayName
 		out.Description = in.Description
