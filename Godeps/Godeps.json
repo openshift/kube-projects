@@ -5,6 +5,8 @@
 	"Packages": [
 		"github.com/ugorji/go/codec/codecgen",
 		"k8s.io/kubernetes/cmd/libs/go2idl/client-gen",
+		"k8s.io/kubernetes/cmd/libs/go2idl/conversion-gen",
+		"k8s.io/kubernetes/cmd/libs/go2idl/deepcopy-gen",
 		"./..."
 	],
 	"Deps": [
@@ -656,7 +658,15 @@
 			"Rev": "9d004f4877d8dc116a678d35e43498404625599d"
 		},
 		{
+			"ImportPath": "k8s.io/gengo/examples/deepcopy-gen/generators",
+			"Rev": "9d004f4877d8dc116a678d35e43498404625599d"
+		},
+		{
 			"ImportPath": "k8s.io/gengo/examples/set-gen/generators",
+			"Rev": "9d004f4877d8dc116a678d35e43498404625599d"
+		},
+		{
+			"ImportPath": "k8s.io/gengo/examples/set-gen/sets",
 			"Rev": "9d004f4877d8dc116a678d35e43498404625599d"
 		},
 		{
@@ -697,6 +707,21 @@
 		},
 		{
 			"ImportPath": "k8s.io/kubernetes/cmd/libs/go2idl/client-gen/generators/normalization",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/cmd/libs/go2idl/conversion-gen",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/cmd/libs/go2idl/conversion-gen/generators",
+			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
+			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/cmd/libs/go2idl/deepcopy-gen",
 			"Comment": "v1.5.0-alpha.1-262-g92cb90f",
 			"Rev": "92cb90fc5d118ed5c892f425ed1ded5290894db5"
 		},
