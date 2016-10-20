@@ -164,27 +164,8 @@ else
     openshift_test_packages="$(list_test_packages_under '*')"
 
     kubernetes_path="vendor/k8s.io/kubernetes"
-    mandatory_kubernetes_packages="./vendor/k8s.io/kubernetes/pkg/api ./vendor/k8s.io/kubernetes/pkg/api/v1"
 
-    test_packages="${openshift_test_packages} ${mandatory_kubernetes_packages}"
-
-    if [[ -n "${test_kube}" ]]; then
-        # we need to find all of the kubernetes test suites, excluding those we directly whitelisted before, the end-to-end suite, and
-        # the go2idl tests which we currently do not support
-        # etcd3 isn't supported yet and that test flakes upstream
-        optional_kubernetes_packages="$(find "${kubernetes_path}" -not \(                             \
-          \(                                                                                          \
-            -path "${kubernetes_path}/pkg/api"                                                        \
-            -o -path "${kubernetes_path}/pkg/api/v1"                                                  \
-            -o -path "${kubernetes_path}/test"                                                        \
-            -o -path "${kubernetes_path}/cmd/libs/go2idl/client-gen/testoutput/testgroup/unversioned" \
-            -o -path "${kubernetes_path}/pkg/storage/etcd3"                                           \
-            -o -path "${kubernetes_path}/third_party/golang/go/build"                                 \
-          \) -prune                                                                                   \
-        \) -name '*_test.go' | cut -f 2- -d / | xargs -n1 dirname | sort -u | xargs -n1 printf "./vendor/%s\n")"
-
-        test_packages="${test_packages} ${optional_kubernetes_packages}"
-    fi
+    test_packages="${openshift_test_packages}"
 fi
 
 if [[ -n "${dry_run}" ]]; then
@@ -223,7 +204,7 @@ if [[ -n "${junit_report}" ]]; then
         | tee "${test_output_file}"                                 \
         | "${junitreport}" --type gotest                            \
                            --suites nested                          \
-                           --roots github.com/openshift/origin      \
+                           --roots github.com/openshift/kube-projects      \
                            --stream                                 \
                            --output "${junit_report_file}"
 
