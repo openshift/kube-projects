@@ -25,7 +25,4 @@ INPUT="--input ${INPUT_APIS[@]}"
 CLIENTSET_PATH="--clientset-path ${PREFIX}/pkg/client/clientset_generated"
 BOILERPLATE="--go-header-file ${OS_ROOT}/hack/boilerplate.txt"
 
-# regular client code
 ${CLIENTGEN} ${INPUT_BASE} ${INPUT} ${CLIENTSET_PATH} ${BOILERPLATE}
-# client code for testdata
-${CLIENTGEN} -t ${INPUT_BASE} ${INPUT} ${CLIENTSET_PATH} ${BOILERPLATE}
