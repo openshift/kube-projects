@@ -11,6 +11,7 @@ REQUIRED_BINS=(
   "k8s.io/kubernetes/cmd/libs/go2idl/client-gen"
   "k8s.io/kubernetes/cmd/libs/go2idl/conversion-gen"
   "k8s.io/kubernetes/cmd/libs/go2idl/deepcopy-gen"
+  "k8s.io/kubernetes/cmd/genswaggertypedocs"
   "./..."
 )
 

@@ -7,6 +7,7 @@
 		"k8s.io/kubernetes/cmd/libs/go2idl/client-gen",
 		"k8s.io/kubernetes/cmd/libs/go2idl/conversion-gen",
 		"k8s.io/kubernetes/cmd/libs/go2idl/deepcopy-gen",
+		"k8s.io/kubernetes/cmd/genswaggertypedocs",
 		"./..."
 	],
 	"Deps": [
@@ -635,6 +636,11 @@
 		{
 			"ImportPath": "k8s.io/gengo/types",
 			"Rev": "9d004f4877d8dc116a678d35e43498404625599d"
+		},
+		{
+			"ImportPath": "k8s.io/kubernetes/cmd/genswaggertypedocs",
+			"Comment": "v1.5.0-alpha.1-737-gc4d2f95",
+			"Rev": "c4d2f95c068960193fb9c57c4d9415f0d1ab3eec"
 		},
 		{
 			"ImportPath": "k8s.io/kubernetes/cmd/libs/go2idl/client-gen",
