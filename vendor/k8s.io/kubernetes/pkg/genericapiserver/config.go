@@ -17,7 +17,6 @@ limitations under the License.
 package genericapiserver
 
 import (
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -36,7 +35,6 @@ import (
 	"k8s.io/kubernetes/pkg/admission"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/unversioned"
-	"k8s.io/kubernetes/pkg/apiserver"
 	apiserverfilters "k8s.io/kubernetes/pkg/apiserver/filters"
 	"k8s.io/kubernetes/pkg/apiserver/request"
 	"k8s.io/kubernetes/pkg/auth/authenticator"
@@ -55,11 +53,15 @@ import (
 	certutil "k8s.io/kubernetes/pkg/util/cert"
 	utilnet "k8s.io/kubernetes/pkg/util/net"
 	"k8s.io/kubernetes/pkg/util/sets"
+	"k8s.io/kubernetes/pkg/version"
 )
 
 const (
-	// LegacyAPIPrefix is where the the legacy APIs will be located
-	LegacyAPIPrefix = "/api"
+	// DefaultLegacyAPIPrefix is where the the legacy APIs will be located.
+	DefaultLegacyAPIPrefix = "/api"
+
+	// APIGroupPrefix is where non-legacy API group will be located.
+	APIGroupPrefix = "/apis"
 )
 
 // Config is a structure used to configure a GenericAPIServer.
@@ -77,11 +79,12 @@ type Config struct {
 	// allow downstream consumers to disable the index route
 	EnableIndex             bool
 	EnableProfiling         bool
-	EnableVersion           bool
 	EnableGarbageCollection bool
-	APIGroupPrefix          string
-	CorsAllowedOriginList   []string
-	Authenticator           authenticator.Request
+
+	Version               *version.Info
+	APIGroupPrefix        string
+	CorsAllowedOriginList []string
+	Authenticator         authenticator.Request
 	// TODO(roberthbailey): Remove once the server no longer supports http basic auth.
 	SupportsBasicAuth      bool
 	Authorizer             authorizer.Authorizer
@@ -122,10 +125,6 @@ type Config struct {
 	// If nil or 0.0.0.0, the host's default interface will be used.
 	PublicAddress net.IP
 
-	// Control the interval that pod, node IP, and node heath status caches
-	// expire.
-	CacheTimeout time.Duration
-
 	// The range of IPs to be assigned to services with type=ClusterIP or greater
 	ServiceClusterIPRange *net.IPNet
 
@@ -137,10 +136,6 @@ type Config struct {
 
 	// The range of ports to be assigned to services with type=NodePort or greater
 	ServiceNodePortRange utilnet.PortRange
-
-	// Used to customize default proxy dial/tls options
-	ProxyDialer          apiserver.ProxyDialerFunc
-	ProxyTLSClientConfig *tls.Config
 
 	// Additional ports to be exposed on the GenericAPIServer service
 	// extraServicePorts is injectable in the event that more ports
@@ -206,14 +201,12 @@ func NewConfig() *Config {
 		MasterCount:            1,
 		ReadWritePort:          6443,
 		ServiceReadWritePort:   443,
-		CacheTimeout:           5 * time.Second,
 		RequestContextMapper:   api.NewRequestContextMapper(),
 		BuildHandlerChainsFunc: DefaultBuildHandlerChain,
-		LegacyAPIGroupPrefixes: sets.NewString(LegacyAPIPrefix),
+		LegacyAPIGroupPrefixes: sets.NewString(DefaultLegacyAPIPrefix),
 
 		EnableIndex:          true,
 		EnableSwaggerSupport: true,
-		EnableVersion:        true,
 		OpenAPIConfig: &common.Config{
 			ProtocolList:   []string{"https"},
 			IgnorePrefixes: []string{"/swaggerapi"},
@@ -279,7 +272,6 @@ func (c *Config) ApplyOptions(options *options.ServerRunOptions) *Config {
 		c.InsecureServingInfo = insecureServingInfo
 	}
 
-	c.APIGroupPrefix = options.APIGroupPrefix
 	c.CorsAllowedOriginList = options.CorsAllowedOriginList
 	c.EnableGarbageCollection = options.EnableGarbageCollection
 	c.EnableProfiling = options.EnableProfiling
@@ -377,7 +369,6 @@ func (c completedConfig) New() (*GenericAPIServer, error) {
 	s := &GenericAPIServer{
 		ServiceClusterIPRange:  c.ServiceClusterIPRange,
 		LoopbackClientConfig:   c.LoopbackClientConfig,
-		apiPrefix:              c.APIGroupPrefix,
 		legacyAPIGroupPrefixes: c.LegacyAPIGroupPrefixes,
 		admissionControl:       c.AdmissionControl,
 		requestContextMapper:   c.RequestContextMapper,
@@ -401,13 +392,6 @@ func (c completedConfig) New() (*GenericAPIServer, error) {
 	}
 
 	s.HandlerContainer = mux.NewAPIContainer(http.NewServeMux(), c.Serializer)
-
-	if c.ProxyDialer != nil || c.ProxyTLSClientConfig != nil {
-		s.ProxyTransport = utilnet.SetTransportDefaults(&http.Transport{
-			Dial:            c.ProxyDialer,
-			TLSClientConfig: c.ProxyTLSClientConfig,
-		})
-	}
 
 	s.installAPI(c.Config)
 
@@ -471,9 +455,7 @@ func (s *GenericAPIServer) installAPI(c *Config) {
 	if c.EnableProfiling {
 		routes.Profiling{}.Install(s.HandlerContainer)
 	}
-	if c.EnableVersion {
-		routes.Version{}.Install(s.HandlerContainer)
-	}
+	routes.Version{Version: c.Version}.Install(s.HandlerContainer)
 	s.HandlerContainer.Add(s.DynamicApisDiscovery())
 }
 
@@ -528,8 +510,8 @@ func DefaultAndValidateRunOptions(options *options.ServerRunOptions) {
 }
 
 func NewRequestInfoResolver(c *Config) *request.RequestInfoFactory {
-	apiPrefixes := sets.NewString(strings.Trim(c.APIGroupPrefix, "/")) // all possible API prefixes
-	legacyAPIPrefixes := sets.String{}                                 // APIPrefixes that won't have groups (legacy)
+	apiPrefixes := sets.NewString(strings.Trim(APIGroupPrefix, "/")) // all possible API prefixes
+	legacyAPIPrefixes := sets.String{}                               // APIPrefixes that won't have groups (legacy)
 	for legacyAPIPrefix := range c.LegacyAPIGroupPrefixes {
 		apiPrefixes.Insert(strings.Trim(legacyAPIPrefix, "/"))
 		legacyAPIPrefixes.Insert(strings.Trim(legacyAPIPrefix, "/"))

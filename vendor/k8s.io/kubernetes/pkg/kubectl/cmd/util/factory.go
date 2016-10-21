@@ -32,8 +32,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/blang/semver"
 	"github.com/emicklei/go-restful/swagger"
+	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -334,26 +334,23 @@ func (f *factory) Object() (meta.RESTMapper, runtime.ObjectTyper) {
 
 	mapper := registered.RESTMapper()
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
-	// if we can find the server version and it's current enough to have discovery information, use it.  Otherwise,
-	// fallback to our hardcoded list
 	if err == nil {
-		if serverVersion, err := discoveryClient.ServerVersion(); err == nil && useDiscoveryRESTMapper(serverVersion.GitVersion) {
-			// register third party resources with the api machinery groups.  This probably should be done, but
-			// its consistent with old code, so we'll start with it.
-			if err := registerThirdPartyResources(discoveryClient); err != nil {
-				fmt.Fprintf(os.Stderr, "Unable to register third party resources: %v\n", err)
-			}
-			// ThirdPartyResourceData is special.  It's not discoverable, but needed for thirdparty resource listing
-			// TODO eliminate this once we're truly generic.
-			thirdPartyResourceDataMapper := meta.NewDefaultRESTMapper([]unversioned.GroupVersion{extensionsv1beta1.SchemeGroupVersion}, registered.InterfacesFor)
-			thirdPartyResourceDataMapper.Add(extensionsv1beta1.SchemeGroupVersion.WithKind("ThirdPartyResourceData"), meta.RESTScopeNamespace)
+		// register third party resources with the api machinery groups.  This probably should be done, but
+		// its consistent with old code, so we'll start with it.
+		if err := registerThirdPartyResources(discoveryClient); err != nil {
+			glog.V(1).Infof("Unable to register third party resources: %v", err)
+		}
+		// ThirdPartyResourceData is special.  It's not discoverable, but needed for thirdparty resource listing
+		// TODO eliminate this once we're truly generic.
+		thirdPartyResourceDataMapper := meta.NewDefaultRESTMapper([]unversioned.GroupVersion{extensionsv1beta1.SchemeGroupVersion}, registered.InterfacesFor)
+		thirdPartyResourceDataMapper.Add(extensionsv1beta1.SchemeGroupVersion.WithKind("ThirdPartyResourceData"), meta.RESTScopeNamespace)
 
-			mapper = meta.FirstHitRESTMapper{
-				MultiRESTMapper: meta.MultiRESTMapper{
-					discovery.NewDeferredDiscoveryRESTMapper(discoveryClient, registered.InterfacesFor),
-					thirdPartyResourceDataMapper,
-				},
-			}
+		mapper = meta.FirstHitRESTMapper{
+			MultiRESTMapper: meta.MultiRESTMapper{
+				discovery.NewDeferredDiscoveryRESTMapper(discoveryClient, registered.InterfacesFor),
+				thirdPartyResourceDataMapper, // needed for TPR printing
+				registered.RESTMapper(),      // hardcoded fall back
+			},
 		}
 	}
 
@@ -762,10 +759,14 @@ func (f *factory) Validator(validate bool, cacheDir string) (validation.Schema, 
 		if err != nil {
 			return nil, err
 		}
-		return &clientSwaggerSchema{
+		swaggerSchema := &clientSwaggerSchema{
 			c:        restclient,
 			fedc:     fedClient,
 			cacheDir: dir,
+		}
+		return validation.ConjunctiveSchema{
+			swaggerSchema,
+			validation.NoDoubleKeySchema{},
 		}, nil
 	}
 	return validation.NullSchema{}, nil
@@ -1332,20 +1333,6 @@ func (f *factory) NewBuilder() *resource.Builder {
 	return resource.NewBuilder(mapper, typer, resource.ClientMapperFunc(f.ClientForMapping), f.Decoder(true))
 }
 
-// useDiscoveryRESTMapper checks the server version to see if its recent enough to have
-// enough discovery information available to reliably build a RESTMapper.  If not, use the
-// hardcoded mapper in this client (legacy behavior)
-func useDiscoveryRESTMapper(serverVersion string) bool {
-	if len(serverVersion) == 0 {
-		return false
-	}
-	serverSemVer, err := semver.Parse(serverVersion[1:])
-	if err != nil {
-		return false
-	}
-	return serverSemVer.GE(semver.MustParse("1.3.0"))
-}
-
 // registerThirdPartyResources inspects the discovery endpoint to find thirdpartyresources in the discovery doc
 // and then registers them with the apimachinery code.  I think this is done so that scheme/codec stuff works,
 // but I really don't know.  Feels like this code should go away once kubectl is completely generic for generic
@@ -1395,4 +1382,21 @@ func registerThirdPartyResources(discoveryClient discovery.DiscoveryInterface) e
 	}
 
 	return nil
+}
+
+func ResourcesWithPodSpecs() []*meta.RESTMapping {
+	restMaps := []*meta.RESTMapping{}
+	resourcesWithTemplates := []string{"ReplicationController", "Deployment", "DaemonSet", "Job", "ReplicaSet"}
+	mapper, _ := NewFactory(nil).Object()
+
+	for _, resource := range resourcesWithTemplates {
+		restmap, err := mapper.RESTMapping(unversioned.GroupKind{Kind: resource})
+		if err == nil {
+			restMaps = append(restMaps, restmap)
+		} else {
+			mapping, _ := mapper.RESTMapping(extensions.Kind(resource))
+			restMaps = append(restMaps, mapping)
+		}
+	}
+	return restMaps
 }

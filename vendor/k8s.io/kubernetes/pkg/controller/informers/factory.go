@@ -36,10 +36,20 @@ type SharedInformerFactory interface {
 	Namespaces() NamespaceInformer
 	PersistentVolumeClaims() PVCInformer
 	PersistentVolumes() PVInformer
+	ServiceAccounts() ServiceAccountInformer
 
 	DaemonSets() DaemonSetInformer
 	Deployments() DeploymentInformer
 	ReplicaSets() ReplicaSetInformer
+
+	ClusterRoles() ClusterRoleInformer
+	ClusterRoleBindings() ClusterRoleBindingInformer
+	Roles() RoleInformer
+	RoleBindings() RoleBindingInformer
+
+	LimitRanges() LimitRangeInformer
+
+	StorageClasses() StorageClassInformer
 }
 
 type sharedInformerFactory struct {
@@ -64,14 +74,14 @@ func NewSharedInformerFactory(client clientset.Interface, defaultResync time.Dur
 }
 
 // Start initializes all requested informers.
-func (s *sharedInformerFactory) Start(stopCh <-chan struct{}) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+func (f *sharedInformerFactory) Start(stopCh <-chan struct{}) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
 
-	for informerType, informer := range s.informers {
-		if !s.startedInformers[informerType] {
+	for informerType, informer := range f.informers {
+		if !f.startedInformers[informerType] {
 			go informer.Run(stopCh)
-			s.startedInformers[informerType] = true
+			f.startedInformers[informerType] = true
 		}
 	}
 }
@@ -101,6 +111,12 @@ func (f *sharedInformerFactory) PersistentVolumes() PVInformer {
 	return &pvInformer{sharedInformerFactory: f}
 }
 
+// ServiceAccounts returns a SharedIndexInformer that lists and watches all service accounts.
+func (f *sharedInformerFactory) ServiceAccounts() ServiceAccountInformer {
+	return &serviceAccountInformer{sharedInformerFactory: f}
+}
+
+// DaemonSets returns a SharedIndexInformer that lists and watches all daemon sets.
 func (f *sharedInformerFactory) DaemonSets() DaemonSetInformer {
 	return &daemonSetInformer{sharedInformerFactory: f}
 }
@@ -111,4 +127,30 @@ func (f *sharedInformerFactory) Deployments() DeploymentInformer {
 
 func (f *sharedInformerFactory) ReplicaSets() ReplicaSetInformer {
 	return &replicaSetInformer{sharedInformerFactory: f}
+}
+
+func (f *sharedInformerFactory) ClusterRoles() ClusterRoleInformer {
+	return &clusterRoleInformer{sharedInformerFactory: f}
+}
+
+func (f *sharedInformerFactory) ClusterRoleBindings() ClusterRoleBindingInformer {
+	return &clusterRoleBindingInformer{sharedInformerFactory: f}
+}
+
+func (f *sharedInformerFactory) Roles() RoleInformer {
+	return &roleInformer{sharedInformerFactory: f}
+}
+
+func (f *sharedInformerFactory) RoleBindings() RoleBindingInformer {
+	return &roleBindingInformer{sharedInformerFactory: f}
+}
+
+// LimitRanges returns a SharedIndexInformer that lists and watches all limit ranges.
+func (f *sharedInformerFactory) LimitRanges() LimitRangeInformer {
+	return &limitRangeInformer{sharedInformerFactory: f}
+}
+
+// StorageClasses returns a SharedIndexInformer that lists and watches all storage classes
+func (f *sharedInformerFactory) StorageClasses() StorageClassInformer {
+	return &storageClassInformer{sharedInformerFactory: f}
 }
