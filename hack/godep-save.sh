@@ -12,6 +12,8 @@ REQUIRED_BINS=(
   "k8s.io/kubernetes/cmd/libs/go2idl/conversion-gen"
   "k8s.io/kubernetes/cmd/libs/go2idl/deepcopy-gen"
   "k8s.io/kubernetes/cmd/genswaggertypedocs"
+  "k8s.io/kubernetes/cmd/libs/go2idl/go-to-protobuf"
+  "k8s.io/kubernetes/cmd/libs/go2idl/go-to-protobuf/protoc-gen-gogo"
   "./..."
 )
 
