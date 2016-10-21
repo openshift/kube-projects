@@ -11,6 +11,7 @@ import (
 	// install all APIs
 	_ "github.com/openshift/kube-projects/pkg/project/api/install"
 	_ "k8s.io/kubernetes/pkg/api/install"
+	_ "k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac"
 )
 
 func main() {
