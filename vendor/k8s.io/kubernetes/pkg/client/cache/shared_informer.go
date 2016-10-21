@@ -210,6 +210,10 @@ func (s *sharedIndexInformer) LastSyncResourceVersion() string {
 	if s.controller == nil {
 		return ""
 	}
+	if s.controller.reflector == nil {
+		return ""
+	}
+
 	return s.controller.reflector.LastSyncResourceVersion()
 }
 
