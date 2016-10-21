@@ -14,7 +14,7 @@ import (
 	"k8s.io/kubernetes/pkg/apis/rbac"
 	"k8s.io/kubernetes/pkg/auth/authorizer"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	kclient "k8s.io/kubernetes/pkg/client/unversioned"
+	"k8s.io/kubernetes/pkg/client/retry"
 	"k8s.io/kubernetes/pkg/runtime"
 	utilruntime "k8s.io/kubernetes/pkg/util/runtime"
 	"k8s.io/kubernetes/pkg/util/wait"
@@ -114,7 +114,7 @@ func (r *REST) waitForAccess(namespace, username string) {
 	// we have a rolebinding, the we check the cache we have to see if its been updated with this rolebinding
 	// if you share a cache with our authorizer (you should), then this will let you know when the authorizer is ready.
 	// doesn't matter if this failed.  When the call returns, return.  If we have access great.  If not, oh well.
-	backoff := kclient.DefaultBackoff
+	backoff := retry.DefaultBackoff
 	backoff.Steps = 6 // this effectively waits for 6-ish seconds
 	err := wait.ExponentialBackoff(backoff, func() (bool, error) {
 		result, err := r.privilegedKubeClient.Authorization().SubjectAccessReviews().Create(sar)
