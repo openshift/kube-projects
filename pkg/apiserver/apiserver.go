@@ -1,13 +1,20 @@
 package apiserver
 
 import (
-	// _ "k8s.io/kubernetes/pkg/api"
+	"fmt"
+	"time"
+
 	"k8s.io/kubernetes/pkg/api/rest"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
+	"k8s.io/kubernetes/pkg/controller/informers"
 	"k8s.io/kubernetes/pkg/genericapiserver"
+	"k8s.io/kubernetes/pkg/util/wait"
+	rbacauthorizer "k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac"
 
 	projectapi "github.com/openshift/kube-projects/pkg/project/api"
 	projectapiv1 "github.com/openshift/kube-projects/pkg/project/api/v1"
+	authcache "github.com/openshift/kube-projects/pkg/project/auth"
+	projectstorage "github.com/openshift/kube-projects/pkg/project/registry/project"
 	projectrequeststorage "github.com/openshift/kube-projects/pkg/project/registry/projectrequest"
 )
 
@@ -40,9 +47,9 @@ func (c *Config) SkipComplete() completedConfig {
 
 // New returns a new instance of ProjectServer from the given config.
 func (c completedConfig) New() (*ProjectServer, error) {
-	// if c.PrivilegedKubeClient == nil {
-	// 	return nil, fmt.Errorf("missing PrivilegedKubeClient")
-	// }
+	if c.PrivilegedKubeClient == nil {
+		return nil, fmt.Errorf("missing PrivilegedKubeClient")
+	}
 
 	s, err := c.Config.GenericConfig.SkipComplete().New() // completion is done in Complete, no need for a second time
 	if err != nil {
@@ -53,17 +60,41 @@ func (c completedConfig) New() (*ProjectServer, error) {
 		GenericAPIServer: s,
 	}
 
+	informerFactory := informers.NewSharedInformerFactory(c.PrivilegedKubeClient, 10*time.Minute)
+	subjectAccessEvaluator := rbacauthorizer.NewSubjectAccessEvaluator(
+		informerFactory.Roles().Lister(),
+		informerFactory.RoleBindings().Lister(),
+		informerFactory.ClusterRoles().Lister(),
+		informerFactory.ClusterRoleBindings().Lister(),
+		"",
+	)
+	authCache := authcache.NewAuthorizationCache(
+		authcache.NewReviewer(subjectAccessEvaluator),
+		informerFactory.Namespaces(),
+		informerFactory.ClusterRoles(), informerFactory.ClusterRoleBindings(), informerFactory.Roles(), informerFactory.RoleBindings(),
+	)
+
 	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(projectapi.GroupName)
 	apiGroupInfo.GroupMeta.GroupVersion = projectapiv1.SchemeGroupVersion
 
 	v1storage := map[string]rest.Storage{}
 	v1storage["projectrequests"] = projectrequeststorage.NewREST("", c.Config.GenericConfig.Authorizer, c.PrivilegedKubeClient)
+	v1storage["projects"] = projectstorage.NewREST(c.PrivilegedKubeClient.Core().Namespaces(), authCache, authCache, informerFactory.Namespaces().Lister())
 
 	apiGroupInfo.VersionedResourcesStorageMap[projectapiv1.SchemeGroupVersion.Version] = v1storage
 
 	if err := m.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {
 		return nil, err
 	}
+
+	m.GenericAPIServer.AddPostStartHook("start-informers", func(context genericapiserver.PostStartHookContext) error {
+		informerFactory.Start(wait.NeverStop)
+		return nil
+	})
+	m.GenericAPIServer.AddPostStartHook("start-authorization-cache", func(context genericapiserver.PostStartHookContext) error {
+		go authCache.Run(1 * time.Second)
+		return nil
+	})
 
 	return m, nil
 }

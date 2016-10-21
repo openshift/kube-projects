@@ -14,11 +14,11 @@ type Reviewer interface {
 
 // reviewer performs access reviews for a project by name
 type reviewer struct {
-	subjectAccessEvaluator rbacauthorizer.SubjectAccessEvaluator
+	subjectAccessEvaluator *rbacauthorizer.SubjectAccessEvaluator
 }
 
 // NewReviewer knows how to make access control reviews for a resource by name
-func NewReviewer(subjectAccessEvaluator rbacauthorizer.SubjectAccessEvaluator) Reviewer {
+func NewReviewer(subjectAccessEvaluator *rbacauthorizer.SubjectAccessEvaluator) Reviewer {
 	return &reviewer{
 		subjectAccessEvaluator: subjectAccessEvaluator,
 	}

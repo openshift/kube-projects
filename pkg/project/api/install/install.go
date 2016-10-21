@@ -11,7 +11,7 @@ func init() {
 	if err := announced.NewGroupMetaFactory(
 		&announced.GroupMetaFactoryArgs{
 			GroupName:                  api.GroupName,
-			RootScopedKinds:            sets.NewString("ProjectRequest"),
+			RootScopedKinds:            sets.NewString("ProjectRequest", "Project"),
 			VersionPreferenceOrder:     []string{v1.SchemeGroupVersion.Version},
 			ImportPrefix:               "github.com/openshift/kube-projects/pkg/project/api",
 			AddInternalObjectsToScheme: api.AddToScheme,

@@ -9,7 +9,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/rest"
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/client/cache"
-	kclient "k8s.io/kubernetes/pkg/client/unversioned"
+	coreclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/unversioned"
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
 	nsregistry "k8s.io/kubernetes/pkg/registry/core/namespace"
@@ -25,7 +25,7 @@ import (
 
 type REST struct {
 	// client can modify Kubernetes namespaces
-	client kclient.NamespaceInterface
+	client coreclient.NamespaceInterface
 	// lister can enumerate project lists that enforce policy
 	lister projectauth.Lister
 	// Allows extended behavior during creation, required
@@ -38,7 +38,7 @@ type REST struct {
 }
 
 // NewREST returns a RESTStorage object that will work against Project resources
-func NewREST(client kclient.NamespaceInterface, lister projectauth.Lister, authCache *projectauth.AuthorizationCache, nsLister *cache.IndexerToNamespaceLister) *REST {
+func NewREST(client coreclient.NamespaceInterface, lister projectauth.Lister, authCache *projectauth.AuthorizationCache, nsLister *cache.IndexerToNamespaceLister) *REST {
 	return &REST{
 		client:         client,
 		lister:         lister,
@@ -167,7 +167,7 @@ var _ = rest.Deleter(&REST{})
 
 // Delete deletes a Project specified by its name
 func (s *REST) Delete(ctx kapi.Context, name string) (runtime.Object, error) {
-	return &unversioned.Status{Status: unversioned.StatusSuccess}, s.client.Delete(name)
+	return &unversioned.Status{Status: unversioned.StatusSuccess}, s.client.Delete(name, nil)
 }
 
 // decoratorFunc can mutate the provided object prior to being returned.
