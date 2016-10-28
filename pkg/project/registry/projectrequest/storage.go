@@ -85,6 +85,7 @@ func (r *REST) Create(ctx kapi.Context, obj runtime.Object) (runtime.Object, err
 	binding.Name = "admin"
 	binding.Namespace = ns
 	binding.Subjects = []rbac.Subject{{Kind: rbac.UserKind, Name: username}}
+	binding.RoleRef.Kind = "ClusterRole"
 	binding.RoleRef.Name = "admin"
 	if _, err := r.privilegedKubeClient.Rbac().RoleBindings(ns).Create(binding); err != nil {
 		utilruntime.HandleError(fmt.Errorf("error rolebinding in %q: %v", projectRequest.Name, err))
