@@ -3,7 +3,7 @@
 
 syntax = 'proto2';
 
-package github.com.openshift.origin.pkg.project.api.v1;
+package github.com.openshift.kube_projects.pkg.project.api.v1;
 
 import "k8s.io/kubernetes/pkg/api/unversioned/generated.proto";
 import "k8s.io/kubernetes/pkg/api/v1/generated.proto";
