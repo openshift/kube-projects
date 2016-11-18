@@ -3,26 +3,16 @@ package server
 import (
 	"fmt"
 	"io"
-	"net"
-	"path"
-	"time"
 
+	"github.com/pborman/uuid"
 	"github.com/spf13/cobra"
 
-	"k8s.io/kubernetes/pkg/auth/authenticator"
-	"k8s.io/kubernetes/pkg/auth/authenticator/bearertoken"
-	"k8s.io/kubernetes/pkg/auth/group"
-	"k8s.io/kubernetes/pkg/auth/user"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
 	"k8s.io/kubernetes/pkg/genericapiserver"
+	genericoptions "k8s.io/kubernetes/pkg/genericapiserver/options"
 	kcmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	certutil "k8s.io/kubernetes/pkg/util/cert"
-	"k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/anonymous"
-	authenticationunion "k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/union"
-	"k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/x509"
-	authenticationwebhook "k8s.io/kubernetes/plugin/pkg/auth/authenticator/token/webhook"
-	authorizationwebhook "k8s.io/kubernetes/plugin/pkg/auth/authorizer/webhook"
+	utilwait "k8s.io/kubernetes/pkg/util/wait"
 
 	"github.com/openshift/kube-projects/pkg/apiserver"
 )
@@ -30,21 +20,25 @@ import (
 const defaultConfigDir = "openshift.local.config/project-server"
 
 type ProjectServerOptions struct {
-	StdOut io.Writer
+	SecureServing  *genericoptions.SecureServingOptions
+	Authentication *genericoptions.DelegatingAuthenticationOptions
+	Authorization  *genericoptions.DelegatingAuthorizationOptions
 
-	ConfigDir string
+	AuthUser string
 
-	// ConfigFile is the serialized config file used to launch this process.  It is optional
-	ConfigFile string
+	ServerUser string
 	KubeConfig string
-	ClientCA   string
 }
 
 const startLong = `Start an API server hosting the project.openshift.io API.`
 
 // NewCommandStartMaster provides a CLI handler for 'start master' command
 func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
-	o := &ProjectServerOptions{StdOut: out}
+	o := &ProjectServerOptions{
+		SecureServing:  genericoptions.NewSecureServingOptions(),
+		Authentication: genericoptions.NewDelegatingAuthenticationOptions(),
+		Authorization:  genericoptions.NewDelegatingAuthorizationOptions(),
+	}
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -60,13 +54,12 @@ func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&o.ConfigDir, "write-config", o.ConfigDir, "Directory to write an initial config into.  After writing, exit without starting the server.")
-	flags.StringVar(&o.KubeConfig, "kubeconfig", o.KubeConfig, "Location of the master configuration file to run from. When running from a configuration file, all other command-line arguments are ignored.")
-	flags.StringVar(&o.ClientCA, "client-ca-file", o.ClientCA, "If set, any request presenting a client certificate signed by one of the authorities in the client-ca-file is authenticated with an identity corresponding to the CommonName of the client certificate.")
-
-	// autocompletion hints
-	cmd.MarkFlagFilename("write-config")
-	cmd.MarkFlagFilename("config", "yaml", "yml")
+	o.SecureServing.AddFlags(flags)
+	o.Authentication.AddFlags(flags)
+	o.Authorization.AddFlags(flags)
+	flags.StringVar(&o.AuthUser, "auth-user", o.AuthUser, "username of the user used for delegating authentication and authorization.  Primes /bootstrap/rbac endpoint.")
+	flags.StringVar(&o.ServerUser, "server-user", o.ServerUser, "username of the user used for accessing resources for this API server.  Primes /bootstrap/rbac endpoint.")
+	flags.StringVar(&o.KubeConfig, "kubeconfig", o.KubeConfig, "kubeconfig file for access resources for this API server.")
 
 	GLog(cmd.PersistentFlags())
 
@@ -81,48 +74,39 @@ func (o *ProjectServerOptions) Complete() error {
 	return nil
 }
 
-// RunServer will eventually take the options and:
-// 1.  Creates certs if needed
-// 2.  Reads fully specified master config OR builds a fully specified master config from the args
-// 3.  Writes the fully specified master config and exits if needed
-// 4.  Starts the master based on the fully specified config
 func (o ProjectServerOptions) RunProjectServer() error {
-	secureServingInfo := genericapiserver.ServingInfo{
-		BindAddress: net.JoinHostPort("0.0.0.0", "8444"),
-		ServerCert: genericapiserver.CertInfo{
-			Generate: true,
-			CertFile: path.Join(defaultConfigDir, "apiserver.crt"),
-			KeyFile:  path.Join(defaultConfigDir, "apiserver.key"),
-		},
-		ClientCA: o.ClientCA,
-	}
-
-	m := &ProjectServer{
-		servingInfo: secureServingInfo,
-		kubeConfig:  o.KubeConfig,
-	}
-	return m.Start()
-}
-
-// ProjectServer encapsulates starting the components of the master
-type ProjectServer struct {
-	// this should be part of the serializeable config
-	servingInfo genericapiserver.ServingInfo
-	kubeConfig  string
-}
-
-// Start launches a master. It will error if possible, but some background processes may still
-// be running and the process should exit after it finishes.
-func (s *ProjectServer) Start() error {
-	genericAPIServerConfig := genericapiserver.NewConfig().Complete()
-	genericAPIServerConfig.SecureServingInfo = &s.servingInfo
+	var err error
+	genericAPIServerConfig := genericapiserver.NewConfig().ApplySecureServingOptions(o.SecureServing)
 	if err := genericAPIServerConfig.MaybeGenerateServingCerts(); err != nil {
 		return err
 	}
 
-	kubeClientConfig, err := clientcmd.
-		NewNonInteractiveDeferredLoadingClientConfig(&clientcmd.ClientConfigLoadingRules{ExplicitPath: s.kubeConfig}, &clientcmd.ConfigOverrides{}).
-		ClientConfig()
+	privilegedLoopbackToken := uuid.NewRandom().String()
+	if genericAPIServerConfig.LoopbackClientConfig, err = genericoptions.NewSelfClientConfig(o.SecureServing, nil, privilegedLoopbackToken); err != nil {
+		return err
+	}
+
+	authenticatorConfig, err := o.Authentication.ToAuthenticationConfig(o.SecureServing.ClientCA)
+	if err != nil {
+		return err
+	}
+	if genericAPIServerConfig.Authenticator, _, err = authenticatorConfig.New(); err != nil {
+		return err
+	}
+
+	authorizerConfig, err := o.Authorization.ToAuthorizationConfig()
+	if err != nil {
+		return err
+	}
+	if genericAPIServerConfig.Authorizer, err = authorizerConfig.New(); err != nil {
+		return err
+	}
+
+	// read the kubeconfig file to use for proxying requests
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	loadingRules.ExplicitPath = o.KubeConfig
+	loader := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &clientcmd.ConfigOverrides{})
+	kubeClientConfig, err := loader.ClientConfig()
 	if err != nil {
 		return err
 	}
@@ -130,57 +114,18 @@ func (s *ProjectServer) Start() error {
 	if err != nil {
 		return err
 	}
-	genericAPIServerConfig.Authenticator, err = NewAuthenticator(s.servingInfo.ClientCA, clientset)
-	if err != nil {
-		return err
-	}
-	genericAPIServerConfig.Authorizer, err = authorizationwebhook.NewFromInterface(clientset.Authorization().SubjectAccessReviews(), 30*time.Second, 30*time.Second)
-	if err != nil {
-		return err
-	}
 
 	config := apiserver.Config{
-		GenericConfig:        genericAPIServerConfig.Config,
+		GenericConfig:        genericAPIServerConfig,
 		PrivilegedKubeClient: clientset,
+		AuthUser:             o.AuthUser,
+		ServerUser:           o.ServerUser,
 	}
 
 	server, err := config.Complete().New()
 	if err != nil {
 		return err
 	}
-	server.GenericAPIServer.Run()
+	server.GenericAPIServer.PrepareRun().Run(utilwait.NeverStop)
 	return nil
-}
-
-func NewAuthenticator(clientCAFile string, clientset internalclientset.Interface) (authenticator.Request, error) {
-	certAuth, err := newAuthenticatorFromClientCAFile(clientCAFile)
-	if err != nil {
-		return nil, err
-	}
-
-	tokenChecker, err := authenticationwebhook.NewFromInterface(clientset.Authentication().TokenReviews(), 5*time.Minute)
-	if err != nil {
-		return nil, err
-	}
-
-	authenticator := authenticationunion.New(certAuth, bearertoken.New(tokenChecker))
-	authenticator = group.NewGroupAdder(authenticator, []string{user.AllAuthenticated})
-
-	// If the authenticator chain returns an error, return an error (don't consider a bad bearer token anonymous).
-	authenticator = authenticationunion.NewFailOnError(authenticator, anonymous.NewAuthenticator())
-
-	return authenticator, nil
-
-}
-
-func newAuthenticatorFromClientCAFile(clientCAFile string) (authenticator.Request, error) {
-	roots, err := certutil.NewPool(clientCAFile)
-	if err != nil {
-		return nil, err
-	}
-
-	opts := x509.DefaultVerifyOptions()
-	opts.Roots = roots
-
-	return x509.New(opts, x509.CommonNameUserConversion), nil
 }

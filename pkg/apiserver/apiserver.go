@@ -22,6 +22,9 @@ type Config struct {
 	GenericConfig *genericapiserver.Config
 
 	PrivilegedKubeClient internalclientset.Interface
+
+	AuthUser   string
+	ServerUser string
 }
 
 // ProjectServer contains state for a Kubernetes cluster master/api server.
