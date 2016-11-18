@@ -62,12 +62,15 @@ type AuthenticatorConfig struct {
 	OIDCGroupsClaim             string
 	ServiceAccountKeyFiles      []string
 	ServiceAccountLookup        bool
-	ServiceAccountTokenGetter   serviceaccount.ServiceAccountTokenGetter
 	KeystoneURL                 string
+	KeystoneCAFile              string
 	WebhookTokenAuthnConfigFile string
 	WebhookTokenAuthnCacheTTL   time.Duration
 
 	RequestHeaderConfig *RequestHeaderConfig
+
+	// TODO, this is the only non-serializable part of the entire config.  Factor it out into a clientconfig
+	ServiceAccountTokenGetter serviceaccount.ServiceAccountTokenGetter
 }
 
 // New returns an authenticator.Request or an error that supports the standard
@@ -101,7 +104,7 @@ func New(config AuthenticatorConfig) (authenticator.Request, *spec.SecurityDefin
 		hasBasicAuth = true
 	}
 	if len(config.KeystoneURL) > 0 {
-		keystoneAuth, err := newAuthenticatorFromKeystoneURL(config.KeystoneURL)
+		keystoneAuth, err := newAuthenticatorFromKeystoneURL(config.KeystoneURL, config.KeystoneCAFile)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -283,7 +286,7 @@ func newAuthenticatorFromClientCAFile(clientCAFile string) (authenticator.Reques
 }
 
 // newAuthenticatorFromTokenFile returns an authenticator.Request or an error
-func newAuthenticatorFromKeystoneURL(keystoneURL string) (authenticator.Request, error) {
+func newAuthenticatorFromKeystoneURL(keystoneURL string, keystoneCAFile string) (authenticator.Request, error) {
 	keystoneAuthenticator, err := keystone.NewKeystoneAuthenticator(keystoneURL)
 	if err != nil {
 		return nil, err
