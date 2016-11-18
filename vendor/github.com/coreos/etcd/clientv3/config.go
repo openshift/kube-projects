@@ -28,10 +28,6 @@ type Config struct {
 	// Endpoints is a list of URLs
 	Endpoints []string
 
-	// AutoSyncInterval is the interval to update endpoints with its latest members.
-	// 0 disables auto-sync. By default auto-sync is disabled.
-	AutoSyncInterval time.Duration
-
 	// DialTimeout is the timeout for failing to establish a connection.
 	DialTimeout time.Duration
 
@@ -50,7 +46,6 @@ type Config struct {
 
 type yamlConfig struct {
 	Endpoints             []string      `json:"endpoints"`
-	AutoSyncInterval      time.Duration `json:"auto-sync-interval"`
 	DialTimeout           time.Duration `json:"dial-timeout"`
 	InsecureTransport     bool          `json:"insecure-transport"`
 	InsecureSkipTLSVerify bool          `json:"insecure-skip-tls-verify"`
@@ -73,9 +68,8 @@ func configFromFile(fpath string) (*Config, error) {
 	}
 
 	cfg := &Config{
-		Endpoints:        yc.Endpoints,
-		AutoSyncInterval: yc.AutoSyncInterval,
-		DialTimeout:      yc.DialTimeout,
+		Endpoints:   yc.Endpoints,
+		DialTimeout: yc.DialTimeout,
 	}
 
 	if yc.InsecureTransport {

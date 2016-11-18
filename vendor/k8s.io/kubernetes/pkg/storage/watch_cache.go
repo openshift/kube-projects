@@ -105,6 +105,7 @@ type watchCache struct {
 	// store will effectively support LIST operation from the "end of cache
 	// history" i.e. from the moment just after the newest cached watched event.
 	// It is necessary to effectively allow clients to start watching at now.
+	// NOTE: We assume that <store> is thread-safe.
 	store cache.Store
 
 	// ResourceVersion up to which the watchCache is propagated.
@@ -202,6 +203,10 @@ func (w *watchCache) processEvent(event watch.Event, resourceVersion uint64, upd
 	}
 	elem := &storeElement{Key: key, Object: event.Object}
 
+	// TODO: We should consider moving this lock below after the watchCacheEvent
+	// is created. In such situation, the only problematic scenario is Replace(
+	// happening after getting object from store and before acquiring a lock.
+	// Maybe introduce another lock for this purpose.
 	w.Lock()
 	defer w.Unlock()
 	previous, exists, err := w.store.Get(elem)
@@ -240,13 +245,13 @@ func (w *watchCache) updateCache(resourceVersion uint64, event *watchCacheEvent)
 
 // List returns list of pointers to <storeElement> objects.
 func (w *watchCache) List() []interface{} {
-	w.RLock()
-	defer w.RUnlock()
 	return w.store.List()
 }
 
-// WaitUntilFreshAndList returns list of pointers to <storeElement> objects.
-func (w *watchCache) WaitUntilFreshAndList(resourceVersion uint64, trace *util.Trace) ([]interface{}, uint64, error) {
+// waitUntilFreshAndBlock waits until cache is at least as fresh as given <resourceVersion>.
+// NOTE: This function acquired lock and doesn't release it.
+// You HAVE TO explicitly call w.RUnlock() after this function.
+func (w *watchCache) waitUntilFreshAndBlock(resourceVersion uint64, trace *util.Trace) error {
 	startTime := w.clock.Now()
 	go func() {
 		// Wake us up when the time limit has expired.  The docs
@@ -261,25 +266,43 @@ func (w *watchCache) WaitUntilFreshAndList(resourceVersion uint64, trace *util.T
 	}()
 
 	w.RLock()
-	defer w.RUnlock()
 	if trace != nil {
 		trace.Step("watchCache locked acquired")
 	}
 	for w.resourceVersion < resourceVersion {
 		if w.clock.Since(startTime) >= MaximumListWait {
-			return nil, 0, fmt.Errorf("time limit exceeded while waiting for resource version %v (current value: %v)", resourceVersion, w.resourceVersion)
+			return fmt.Errorf("time limit exceeded while waiting for resource version %v (current value: %v)", resourceVersion, w.resourceVersion)
 		}
 		w.cond.Wait()
 	}
 	if trace != nil {
 		trace.Step("watchCache fresh enough")
 	}
+	return nil
+}
+
+// WaitUntilFreshAndList returns list of pointers to <storeElement> objects.
+func (w *watchCache) WaitUntilFreshAndList(resourceVersion uint64, trace *util.Trace) ([]interface{}, uint64, error) {
+	err := w.waitUntilFreshAndBlock(resourceVersion, trace)
+	defer w.RUnlock()
+	if err != nil {
+		return nil, 0, err
+	}
 	return w.store.List(), w.resourceVersion, nil
 }
 
-func (w *watchCache) ListKeys() []string {
-	w.RLock()
+// WaitUntilFreshAndGet returns a pointers to <storeElement> object.
+func (w *watchCache) WaitUntilFreshAndGet(resourceVersion uint64, key string, trace *util.Trace) (interface{}, bool, uint64, error) {
+	err := w.waitUntilFreshAndBlock(resourceVersion, trace)
 	defer w.RUnlock()
+	if err != nil {
+		return nil, false, 0, err
+	}
+	value, exists, err := w.store.GetByKey(key)
+	return value, exists, w.resourceVersion, err
+}
+
+func (w *watchCache) ListKeys() []string {
 	return w.store.ListKeys()
 }
 
@@ -295,15 +318,11 @@ func (w *watchCache) Get(obj interface{}) (interface{}, bool, error) {
 		return nil, false, fmt.Errorf("couldn't compute key: %v", err)
 	}
 
-	w.RLock()
-	defer w.RUnlock()
 	return w.store.Get(&storeElement{Key: key, Object: object})
 }
 
 // GetByKey returns pointer to <storeElement>.
 func (w *watchCache) GetByKey(key string) (interface{}, bool, error) {
-	w.RLock()
-	defer w.RUnlock()
 	return w.store.GetByKey(key)
 }
 

@@ -190,28 +190,28 @@ func appliesToUser(user user.Info, subject rbac.Subject, namespace string) bool 
 }
 
 // NewTestRuleResolver returns a rule resolver from lists of role objects.
-func NewTestRuleResolver(roles []*rbac.Role, roleBindings []*rbac.RoleBinding, clusterRoles []*rbac.ClusterRole, clusterRoleBindings []*rbac.ClusterRoleBinding) (AuthorizationRuleResolver, *StaticRoles) {
-	r := StaticRoles{
+func NewTestRuleResolver(roles []*rbac.Role, roleBindings []*rbac.RoleBinding, clusterRoles []*rbac.ClusterRole, clusterRoleBindings []*rbac.ClusterRoleBinding) AuthorizationRuleResolver {
+	r := staticRoles{
 		roles:               roles,
 		roleBindings:        roleBindings,
 		clusterRoles:        clusterRoles,
 		clusterRoleBindings: clusterRoleBindings,
 	}
-	return newMockRuleResolver(&r), &r
+	return newMockRuleResolver(&r)
 }
 
-func newMockRuleResolver(r *StaticRoles) AuthorizationRuleResolver {
+func newMockRuleResolver(r *staticRoles) AuthorizationRuleResolver {
 	return NewDefaultRuleResolver(r, r, r, r)
 }
 
-type StaticRoles struct {
+type staticRoles struct {
 	roles               []*rbac.Role
 	roleBindings        []*rbac.RoleBinding
 	clusterRoles        []*rbac.ClusterRole
 	clusterRoleBindings []*rbac.ClusterRoleBinding
 }
 
-func (r *StaticRoles) GetRole(namespace, name string) (*rbac.Role, error) {
+func (r *staticRoles) GetRole(namespace, name string) (*rbac.Role, error) {
 	if len(namespace) == 0 {
 		return nil, errors.New("must provide namespace when getting role")
 	}
@@ -223,7 +223,7 @@ func (r *StaticRoles) GetRole(namespace, name string) (*rbac.Role, error) {
 	return nil, errors.New("role not found")
 }
 
-func (r *StaticRoles) GetClusterRole(name string) (*rbac.ClusterRole, error) {
+func (r *staticRoles) GetClusterRole(name string) (*rbac.ClusterRole, error) {
 	for _, clusterRole := range r.clusterRoles {
 		if clusterRole.Name == name {
 			return clusterRole, nil
@@ -232,7 +232,7 @@ func (r *StaticRoles) GetClusterRole(name string) (*rbac.ClusterRole, error) {
 	return nil, errors.New("role not found")
 }
 
-func (r *StaticRoles) ListRoleBindings(namespace string) ([]*rbac.RoleBinding, error) {
+func (r *staticRoles) ListRoleBindings(namespace string) ([]*rbac.RoleBinding, error) {
 	if len(namespace) == 0 {
 		return nil, errors.New("must provide namespace when listing role bindings")
 	}
@@ -248,6 +248,6 @@ func (r *StaticRoles) ListRoleBindings(namespace string) ([]*rbac.RoleBinding, e
 	return roleBindingList, nil
 }
 
-func (r *StaticRoles) ListClusterRoleBindings() ([]*rbac.ClusterRoleBinding, error) {
+func (r *staticRoles) ListClusterRoleBindings() ([]*rbac.ClusterRoleBinding, error) {
 	return r.clusterRoleBindings, nil
 }
