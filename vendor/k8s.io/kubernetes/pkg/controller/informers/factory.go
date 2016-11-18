@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/client/cache"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 )
@@ -31,9 +32,14 @@ type SharedInformerFactory interface {
 	// Start starts informers that can start AFTER the API server and controllers have started
 	Start(stopCh <-chan struct{})
 
+	ForResource(unversioned.GroupResource) (GenericInformer, error)
+
+	// when you update these, update generic.go/ForResource, same package
+
 	Pods() PodInformer
-	Nodes() NodeInformer
+	LimitRanges() LimitRangeInformer
 	Namespaces() NamespaceInformer
+	Nodes() NodeInformer
 	PersistentVolumeClaims() PVCInformer
 	PersistentVolumes() PVInformer
 	ServiceAccounts() ServiceAccountInformer
@@ -42,14 +48,14 @@ type SharedInformerFactory interface {
 	Deployments() DeploymentInformer
 	ReplicaSets() ReplicaSetInformer
 
-	ClusterRoles() ClusterRoleInformer
 	ClusterRoleBindings() ClusterRoleBindingInformer
-	Roles() RoleInformer
+	ClusterRoles() ClusterRoleInformer
 	RoleBindings() RoleBindingInformer
-
-	LimitRanges() LimitRangeInformer
+	Roles() RoleInformer
 
 	StorageClasses() StorageClassInformer
+
+	Jobs() JobInformer
 }
 
 type sharedInformerFactory struct {
@@ -153,4 +159,9 @@ func (f *sharedInformerFactory) LimitRanges() LimitRangeInformer {
 // StorageClasses returns a SharedIndexInformer that lists and watches all storage classes
 func (f *sharedInformerFactory) StorageClasses() StorageClassInformer {
 	return &storageClassInformer{sharedInformerFactory: f}
+}
+
+// Jobs returns a SharedIndexInformer that lists and watches all storage jobs
+func (f *sharedInformerFactory) Jobs() JobInformer {
+	return &jobInformer{sharedInformerFactory: f}
 }

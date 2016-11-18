@@ -1463,8 +1463,6 @@ func validateVolumeMounts(mounts []api.VolumeMount, volumes sets.String, fldPath
 		}
 		if len(mnt.MountPath) == 0 {
 			allErrs = append(allErrs, field.Required(idxPath.Child("mountPath"), ""))
-		} else if strings.Contains(mnt.MountPath, ":") {
-			allErrs = append(allErrs, field.Invalid(idxPath.Child("mountPath"), mnt.MountPath, "must not contain ':'"))
 		}
 		if mountpoints.Has(mnt.MountPath) {
 			allErrs = append(allErrs, field.Invalid(idxPath.Child("mountPath"), mnt.MountPath, "must be unique"))
@@ -2635,8 +2633,12 @@ func validateServiceAnnotations(service *api.Service, oldService *api.Service) (
 func ValidateServiceUpdate(service, oldService *api.Service) field.ErrorList {
 	allErrs := ValidateObjectMetaUpdate(&service.ObjectMeta, &oldService.ObjectMeta, field.NewPath("metadata"))
 
-	if api.IsServiceIPSet(oldService) {
-		allErrs = append(allErrs, ValidateImmutableField(service.Spec.ClusterIP, oldService.Spec.ClusterIP, field.NewPath("spec", "clusterIP"))...)
+	// ClusterIP should be immutable for services using it (every type other than ExternalName)
+	// which do not have ClusterIP assigned yet (empty string value)
+	if service.Spec.Type != api.ServiceTypeExternalName {
+		if oldService.Spec.Type != api.ServiceTypeExternalName && oldService.Spec.ClusterIP != "" {
+			allErrs = append(allErrs, ValidateImmutableField(service.Spec.ClusterIP, oldService.Spec.ClusterIP, field.NewPath("spec", "clusterIP"))...)
+		}
 	}
 
 	// TODO(freehan): allow user to update loadbalancerSourceRanges
@@ -2840,6 +2842,17 @@ func ValidateNodeUpdate(node, oldNode *api.Node) field.ErrorList {
 	// if !api.Semantic.DeepEqual(node.Status, api.NodeStatus{}) {
 	// 	allErrs = append(allErrs, field.Invalid("status", node.Status, "must be empty"))
 	// }
+
+	// Validate resource quantities in capacity.
+	for k, v := range node.Status.Capacity {
+		resPath := field.NewPath("status", "capacity", string(k))
+		allErrs = append(allErrs, ValidateResourceQuantityValue(string(k), v, resPath)...)
+	}
+	// Validate resource quantities in allocatable.
+	for k, v := range node.Status.Allocatable {
+		resPath := field.NewPath("status", "allocatable", string(k))
+		allErrs = append(allErrs, ValidateResourceQuantityValue(string(k), v, resPath)...)
+	}
 
 	// Validte no duplicate addresses in node status.
 	addresses := make(map[api.NodeAddress]bool)
@@ -3232,9 +3245,10 @@ func ValidateResourceRequirements(requirements *api.ResourceRequirements, fldPat
 		fldPath := limPath.Key(string(resourceName))
 		// Validate resource name.
 		allErrs = append(allErrs, validateContainerResourceName(string(resourceName), fldPath)...)
-		if api.IsStandardResourceName(string(resourceName)) {
-			allErrs = append(allErrs, validateBasicResource(quantity, fldPath.Key(string(resourceName)))...)
-		}
+
+		// Validate resource quantity.
+		allErrs = append(allErrs, ValidateResourceQuantityValue(string(resourceName), quantity, fldPath)...)
+
 		// Check that request <= limit.
 		requestQuantity, exists := requirements.Requests[resourceName]
 		if exists {
@@ -3250,10 +3264,10 @@ func ValidateResourceRequirements(requirements *api.ResourceRequirements, fldPat
 		fldPath := reqPath.Key(string(resourceName))
 		// Validate resource name.
 		allErrs = append(allErrs, validateContainerResourceName(string(resourceName), fldPath)...)
-		if api.IsStandardResourceName(string(resourceName)) {
-			allErrs = append(allErrs, validateBasicResource(quantity, fldPath.Key(string(resourceName)))...)
-		}
+		// Validate resource quantity.
+		allErrs = append(allErrs, ValidateResourceQuantityValue(string(resourceName), quantity, fldPath)...)
 	}
+
 	return allErrs
 }
 

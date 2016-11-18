@@ -344,8 +344,59 @@ func (c *Cacher) Get(ctx context.Context, key string, objPtr runtime.Object, ign
 }
 
 // Implements storage.Interface.
-func (c *Cacher) GetToList(ctx context.Context, key string, pred SelectionPredicate, listObj runtime.Object) error {
-	return c.storage.GetToList(ctx, key, pred, listObj)
+func (c *Cacher) GetToList(ctx context.Context, key string, resourceVersion string, pred SelectionPredicate, listObj runtime.Object) error {
+	if resourceVersion == "" {
+		// If resourceVersion is not specified, serve it from underlying
+		// storage (for backward compatibility).
+		return c.storage.GetToList(ctx, key, resourceVersion, pred, listObj)
+	}
+
+	// If resourceVersion is specified, serve it from cache.
+	// It's guaranteed that the returned value is at least that
+	// fresh as the given resourceVersion.
+	listRV, err := ParseListResourceVersion(resourceVersion)
+	if err != nil {
+		return err
+	}
+
+	trace := util.NewTrace(fmt.Sprintf("cacher %v: List", c.objectType.String()))
+	defer trace.LogIfLong(500 * time.Millisecond)
+
+	c.ready.wait()
+	trace.Step("Ready")
+
+	// List elements with at least 'listRV' from cache.
+	listPtr, err := meta.GetItemsPtr(listObj)
+	if err != nil {
+		return err
+	}
+	listVal, err := conversion.EnforcePtr(listPtr)
+	if err != nil || listVal.Kind() != reflect.Slice {
+		return fmt.Errorf("need a pointer to slice, got %v", listVal.Kind())
+	}
+	filter := filterFunction(key, pred)
+
+	obj, exists, readResourceVersion, err := c.watchCache.WaitUntilFreshAndGet(listRV, key, trace)
+	if err != nil {
+		return fmt.Errorf("failed to wait for fresh list: %v", err)
+	}
+	trace.Step("Got from cache")
+
+	if exists {
+		elem, ok := obj.(*storeElement)
+		if !ok {
+			return fmt.Errorf("non *storeElement returned from storage: %v", obj)
+		}
+		if filter(elem.Key, elem.Object) {
+			listVal.Set(reflect.Append(listVal, reflect.ValueOf(elem.Object).Elem()))
+		}
+	}
+	if c.versioner != nil {
+		if err := c.versioner.UpdateList(listObj, readResourceVersion); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Implements storage.Interface.
@@ -359,7 +410,6 @@ func (c *Cacher) List(ctx context.Context, key string, resourceVersion string, p
 	// If resourceVersion is specified, serve it from cache.
 	// It's guaranteed that the returned value is at least that
 	// fresh as the given resourceVersion.
-
 	listRV, err := ParseListResourceVersion(resourceVersion)
 	if err != nil {
 		return err
@@ -371,7 +421,7 @@ func (c *Cacher) List(ctx context.Context, key string, resourceVersion string, p
 	c.ready.wait()
 	trace.Step("Ready")
 
-	// List elements from cache, with at least 'listRV'.
+	// List elements with at least 'listRV' from cache.
 	listPtr, err := meta.GetItemsPtr(listObj)
 	if err != nil {
 		return err
@@ -412,7 +462,21 @@ func (c *Cacher) List(ctx context.Context, key string, resourceVersion string, p
 }
 
 // Implements storage.Interface.
-func (c *Cacher) GuaranteedUpdate(ctx context.Context, key string, ptrToType runtime.Object, ignoreNotFound bool, preconditions *Preconditions, tryUpdate UpdateFunc) error {
+func (c *Cacher) GuaranteedUpdate(
+	ctx context.Context, key string, ptrToType runtime.Object, ignoreNotFound bool,
+	preconditions *Preconditions, tryUpdate UpdateFunc, _ ...runtime.Object) error {
+	// Ignore the suggestion and try to pass down the current version of the object
+	// read from cache.
+	if elem, exists, err := c.watchCache.GetByKey(key); err != nil {
+		glog.Errorf("GetByKey returned error: %v", err)
+	} else if exists {
+		currObj, copyErr := api.Scheme.Copy(elem.(*storeElement).Object)
+		if copyErr == nil {
+			return c.storage.GuaranteedUpdate(ctx, key, ptrToType, ignoreNotFound, preconditions, tryUpdate, currObj)
+		}
+		glog.Errorf("couldn't copy object: %v", copyErr)
+	}
+	// If we couldn't get the object, fallback to no-suggestion.
 	return c.storage.GuaranteedUpdate(ctx, key, ptrToType, ignoreNotFound, preconditions, tryUpdate)
 }
 
@@ -678,7 +742,7 @@ func (c *cacheWatcher) add(event *watchCacheEvent) {
 	trace := util.NewTrace(
 		fmt.Sprintf("cacheWatcher %v: waiting for add (initial result size %v)",
 			reflect.TypeOf(event.Object).String(), len(c.result)))
-	defer trace.LogIfLong(5 * time.Millisecond)
+	defer trace.LogIfLong(50 * time.Millisecond)
 
 	const timeout = 5 * time.Second
 	t, ok := timerPool.Get().(*time.Timer)

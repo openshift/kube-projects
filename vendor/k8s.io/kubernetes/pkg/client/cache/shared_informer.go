@@ -207,13 +207,9 @@ func (s *sharedIndexInformer) LastSyncResourceVersion() string {
 	s.startedLock.Lock()
 	defer s.startedLock.Unlock()
 
-	if s.controller == nil {
+	if s.controller == nil || s.controller.reflector == nil {
 		return ""
 	}
-	if s.controller.reflector == nil {
-		return ""
-	}
-
 	return s.controller.reflector.LastSyncResourceVersion()
 }
 
