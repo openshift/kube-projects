@@ -12,13 +12,13 @@ import (
 )
 
 // Index provides a webservice for the http root / listing all known paths.
-type RoleBindings struct {
+type RBAC struct {
 	ServerUser string
 	AuthUser   string
 }
 
 // Install adds the Index webservice to the given mux.
-func (i RoleBindings) Install(mux *http.ServeMux) {
+func (i RBAC) Install(mux *http.ServeMux) {
 	mux.HandleFunc("/bootstrap/rbac", func(w http.ResponseWriter, r *http.Request) {
 		resourceList := i.rbacResources()
 
@@ -37,7 +37,7 @@ func (i RoleBindings) Install(mux *http.ServeMux) {
 	})
 }
 
-func (i RoleBindings) rbacResources() *api.List {
+func (i RBAC) rbacResources() *api.List {
 	ret := &api.List{}
 
 	rolebindings := i.clusterRoleBindings()
@@ -63,7 +63,7 @@ const (
 	rbacGroup    = "rbac.authorization.k8s.io"
 )
 
-func (i RoleBindings) clusterRoles() []rbac.ClusterRole {
+func (i RBAC) clusterRoles() []rbac.ClusterRole {
 	return []rbac.ClusterRole{
 		{
 			ObjectMeta: api.ObjectMeta{Name: projectGroup + ":admin"},
@@ -107,7 +107,7 @@ func (i RoleBindings) clusterRoles() []rbac.ClusterRole {
 	}
 }
 
-func (i RoleBindings) clusterRoleBindings() []rbac.ClusterRoleBinding {
+func (i RBAC) clusterRoleBindings() []rbac.ClusterRoleBinding {
 	// we need this role so that we can run delegated auth checks
 	auth := rbac.NewClusterBinding("system:auth-delegator").Users(i.AuthUser).BindingOrDie()
 	auth.Name = projectGroup + ":" + auth.Name
@@ -124,7 +124,7 @@ func (i RoleBindings) clusterRoleBindings() []rbac.ClusterRoleBinding {
 		auth,
 		admin,
 		projectAdmin,
-		rbac.NewClusterBinding(projectGroup + ":namespace-proxy").Users(i.ServerUser).BindingOrDie(),
+		rbac.NewClusterBinding(projectGroup + ":server").Users(i.ServerUser).BindingOrDie(),
 		rbac.NewClusterBinding(projectGroup + ":self-provisioner").Groups(user.AllAuthenticated).BindingOrDie(),
 		rbac.NewClusterBinding(projectGroup+":basic-user").Groups(user.AllAuthenticated, user.AllUnauthenticated).BindingOrDie(),
 	}

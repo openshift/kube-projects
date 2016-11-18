@@ -77,6 +77,9 @@ func (o *ProjectServerOptions) Complete() error {
 func (o ProjectServerOptions) RunProjectServer() error {
 	var err error
 	genericAPIServerConfig := genericapiserver.NewConfig().ApplySecureServingOptions(o.SecureServing)
+	// TODO remove this, it should be applied some other way
+	genericAPIServerConfig.PublicAddress, _ = o.SecureServing.ServingOptions.DefaultExternalAddress()
+
 	if err := genericAPIServerConfig.MaybeGenerateServingCerts(); err != nil {
 		return err
 	}
