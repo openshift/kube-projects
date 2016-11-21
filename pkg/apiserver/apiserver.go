@@ -2,15 +2,23 @@ package apiserver
 
 import (
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"os"
 	"time"
 
+	kapi "k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/rest"
+	apiserverfilters "k8s.io/kubernetes/pkg/apiserver/filters"
+	authhandlers "k8s.io/kubernetes/pkg/auth/handlers"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/controller/informers"
 	"k8s.io/kubernetes/pkg/genericapiserver"
+	genericfilters "k8s.io/kubernetes/pkg/genericapiserver/filters"
 	"k8s.io/kubernetes/pkg/util/wait"
 	rbacauthorizer "k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac"
 
+	"github.com/openshift/kube-projects/pkg/apiserver/bootstraproutes"
 	projectapi "github.com/openshift/kube-projects/pkg/project/api"
 	projectapiv1 "github.com/openshift/kube-projects/pkg/project/api/v1"
 	authcache "github.com/openshift/kube-projects/pkg/project/auth"
@@ -54,6 +62,11 @@ func (c completedConfig) New() (*ProjectServer, error) {
 		return nil, fmt.Errorf("missing PrivilegedKubeClient")
 	}
 
+	unprotectedMux := http.NewServeMux()
+	c.Config.GenericConfig.BuildHandlerChainsFunc = (&handlerChainConfig{
+		unprotectedMux: unprotectedMux,
+	}).handlerChain
+
 	s, err := c.Config.GenericConfig.SkipComplete().New() // completion is done in Complete, no need for a second time
 	if err != nil {
 		return nil, err
@@ -62,6 +75,18 @@ func (c completedConfig) New() (*ProjectServer, error) {
 	m := &ProjectServer{
 		GenericAPIServer: s,
 	}
+
+	// this isn't exactly a CA, but it will verify in the simple case until I pass something in.
+	certBytes, err := ioutil.ReadFile(c.Config.GenericConfig.SecureServingInfo.ServerCert.CertFile)
+	if err != nil {
+		return nil, err
+	}
+
+	bootstraproutes.RBAC{AuthUser: c.AuthUser, ServerUser: c.ServerUser}.Install(unprotectedMux)
+	bootstraproutes.APIFederation{
+		InternalHost: c.Config.GenericConfig.ExternalAddress,
+		CABundle:     certBytes,
+	}.Install(unprotectedMux)
 
 	informerFactory := informers.NewSharedInformerFactory(c.PrivilegedKubeClient, 10*time.Minute)
 	subjectAccessEvaluator := rbacauthorizer.NewSubjectAccessEvaluator(
@@ -100,4 +125,44 @@ func (c completedConfig) New() (*ProjectServer, error) {
 	})
 
 	return m, nil
+}
+
+type handlerChainConfig struct {
+	unprotectedMux *http.ServeMux
+}
+
+func (h *handlerChainConfig) handlerChain(apiHandler http.Handler, c *genericapiserver.Config) (secure, insecure http.Handler) {
+	attributeGetter := apiserverfilters.NewRequestAttributeGetter(c.RequestContextMapper)
+
+	handler := apiserverfilters.WithAuthorization(apiHandler, attributeGetter, c.Authorizer)
+
+	// this mux is NOT protected by authorization, but DOES have authentication information
+	// this is so that everyone can hit these endpoints, but we have the user information for proxy cases
+	handler = WithUnprotectedMux(handler, h.unprotectedMux)
+
+	handler = apiserverfilters.WithImpersonation(handler, c.RequestContextMapper, c.Authorizer)
+	handler = apiserverfilters.WithAudit(handler, attributeGetter, os.Stdout)
+	handler = authhandlers.WithAuthentication(handler, c.RequestContextMapper, c.Authenticator, authhandlers.Unauthorized(c.SupportsBasicAuth))
+
+	handler = genericfilters.WithCORS(handler, c.CorsAllowedOriginList, nil, nil, nil, "true")
+	handler = genericfilters.WithPanicRecovery(handler, c.RequestContextMapper)
+	handler = apiserverfilters.WithRequestInfo(handler, genericapiserver.NewRequestInfoResolver(c), c.RequestContextMapper)
+	handler = kapi.WithRequestContext(handler, c.RequestContextMapper)
+	handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.LongRunningFunc)
+	handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.LongRunningFunc)
+
+	return handler, nil
+}
+
+func WithUnprotectedMux(handler http.Handler, mux *http.ServeMux) http.Handler {
+	if mux == nil {
+		return handler
+	}
+
+	// register the handler at this stage against everything under slash.  More specific paths that get registered will take precedence
+	mux.Handle("/", handler)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		mux.ServeHTTP(w, req)
+	})
 }

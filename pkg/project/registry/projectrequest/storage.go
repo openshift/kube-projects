@@ -92,6 +92,13 @@ func (r *REST) Create(ctx kapi.Context, obj runtime.Object) (runtime.Object, err
 		return nil, kapierror.NewInternalError(err)
 	}
 
+	binding.Name = projectapi.GroupName + ":admin"
+	binding.RoleRef.Name = projectapi.GroupName + ":admin"
+	if _, err := r.privilegedKubeClient.Rbac().RoleBindings(ns).Create(binding); err != nil {
+		utilruntime.HandleError(fmt.Errorf("error rolebinding in %q: %v", projectRequest.Name, err))
+		return nil, kapierror.NewInternalError(err)
+	}
+
 	r.waitForAccess(ns, username)
 
 	return projectutil.ConvertNamespace(resultingNamespace), nil

@@ -7,12 +7,14 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/spf13/cobra"
 
+	"k8s.io/kubernetes/pkg/apiserver/authenticator"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
 	"k8s.io/kubernetes/pkg/genericapiserver"
 	genericoptions "k8s.io/kubernetes/pkg/genericapiserver/options"
 	kcmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	utilwait "k8s.io/kubernetes/pkg/util/wait"
+	unionauth "k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/union"
 
 	"github.com/openshift/kube-projects/pkg/apiserver"
 )
@@ -23,6 +25,7 @@ type ProjectServerOptions struct {
 	SecureServing  *genericoptions.SecureServingOptions
 	Authentication *genericoptions.DelegatingAuthenticationOptions
 	Authorization  *genericoptions.DelegatingAuthorizationOptions
+	AuthProxy      *genericoptions.RequestHeaderAuthenticationOptions
 
 	AuthUser string
 
@@ -38,6 +41,7 @@ func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
 		SecureServing:  genericoptions.NewSecureServingOptions(),
 		Authentication: genericoptions.NewDelegatingAuthenticationOptions(),
 		Authorization:  genericoptions.NewDelegatingAuthorizationOptions(),
+		AuthProxy:      &genericoptions.RequestHeaderAuthenticationOptions{},
 	}
 
 	cmd := &cobra.Command{
@@ -57,6 +61,7 @@ func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
 	o.SecureServing.AddFlags(flags)
 	o.Authentication.AddFlags(flags)
 	o.Authorization.AddFlags(flags)
+	o.AuthProxy.AddFlags(flags)
 	flags.StringVar(&o.AuthUser, "auth-user", o.AuthUser, "username of the user used for delegating authentication and authorization.  Primes /bootstrap/rbac endpoint.")
 	flags.StringVar(&o.ServerUser, "server-user", o.ServerUser, "username of the user used for accessing resources for this API server.  Primes /bootstrap/rbac endpoint.")
 	flags.StringVar(&o.KubeConfig, "kubeconfig", o.KubeConfig, "kubeconfig file for access resources for this API server.")
@@ -77,6 +82,9 @@ func (o *ProjectServerOptions) Complete() error {
 func (o ProjectServerOptions) RunProjectServer() error {
 	var err error
 	genericAPIServerConfig := genericapiserver.NewConfig().ApplySecureServingOptions(o.SecureServing)
+	// TODO remove this, it should be applied some other way
+	genericAPIServerConfig.PublicAddress, _ = o.SecureServing.ServingOptions.DefaultExternalAddress()
+
 	if err := genericAPIServerConfig.MaybeGenerateServingCerts(); err != nil {
 		return err
 	}
@@ -93,6 +101,13 @@ func (o ProjectServerOptions) RunProjectServer() error {
 	if genericAPIServerConfig.Authenticator, _, err = authenticatorConfig.New(); err != nil {
 		return err
 	}
+	// TODO make this a lot easier
+	proxyConfig := o.AuthProxy.ToAuthenticationRequestHeaderConfig()
+	proxyAuthenticator, _, err := authenticator.New(authenticator.AuthenticatorConfig{RequestHeaderConfig: proxyConfig})
+	if err != nil {
+		return err
+	}
+	genericAPIServerConfig.Authenticator = unionauth.New(proxyAuthenticator, genericAPIServerConfig.Authenticator)
 
 	authorizerConfig, err := o.Authorization.ToAuthorizationConfig()
 	if err != nil {
