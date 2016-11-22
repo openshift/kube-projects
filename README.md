@@ -1,6 +1,36 @@
 OpenShift Project API for Kubernetes
 ====================================
 
-Start the Kubernetes API server using: `ALLOW_ANY_TOKEN=true ENABLE_RBAC=true hack/local-up-cluster.sh`, then start this by running `project-server --kubeconfig=test/artifacts/local-secure-anytoken-kubeconfig --client-ca-file=/var/run/kubernetes/apiserver.crt --loglevel=8`.
+A server to provide `projects` (ACL filtered view of namespaces) and `projectrequests` (controlled escalation to create a particular namespace and grant you rights to see/use it).
 
-You can use `kubectl` or `oc` against the server with `oc login localhost:8444 --token=your-user`.
+
+1. Start up the `kube-aggregator`: https://github.com/openshift/kube-aggregator
+
+2. 
+```
+# start the projects API server
+nice make && hack/local-up.sh
+
+# create bootstrap rbac resources
+echo `curl -k https://localhost:8445/bootstrap/rbac`  | kubectl create -f - --token=root/system:masters --server=https://localhost:6443
+
+# register with the API federator
+echo `curl -k https://localhost:8445/bootstrap/apifederation` | kubectl create -f - --token=federation-editor --server=https://localhost:8444
+
+# log into the API federator as  yourself
+# TODO requires https://github.com/openshift/origin/pull/11340
+oc login https://localhost:8444 --token deads
+
+kubectl get projects
+
+# create a new project request
+sed 's/PROJECT_NAME/my-project/g' test/artifacts/project-request.yaml | kubectl create -f -
+
+# see the new project
+kubectl get projects
+
+oc project my-project
+
+# see the service accounts
+kubectl get sa
+```
