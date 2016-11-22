@@ -14,6 +14,6 @@ ${OS_ROOT}/_output/local/bin/linux/amd64/project-server \
   --auth-user=project-server \
   --server-user=project-server \
   --kubeconfig=${OS_ROOT}/test/artifacts/local-secure-anytoken-server.kubeconfig \
-  --client-ca-file=/var/run/kubernetes/apiserver.crt \
+  --client-ca-file=/var/run/kubernetes/complete-client-ca-bundle.crt \
   --tls-ca-file=/var/run/kubernetes/apiserver.crt \
   --secure-port=8445
