@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
@@ -76,19 +75,13 @@ func (c completedConfig) New() (*ProjectServer, error) {
 		GenericAPIServer: s,
 	}
 
-	// this isn't exactly a CA, but it will verify in the simple case until I pass something in.
-	certBytes, err := ioutil.ReadFile(c.Config.GenericConfig.SecureServingInfo.ServerCert.CertFile)
-	if err != nil {
-		return nil, err
-	}
-
 	bootstraproutes.RBAC{AuthUser: c.AuthUser, ServerUser: c.ServerUser}.Install(unprotectedMux)
 	bootstraproutes.APIFederation{
-		InternalHost: c.Config.GenericConfig.ExternalAddress,
-		CABundle:     certBytes,
+		Namespace:   "projects.openshift.io",
+		ServiceName: "api",
 	}.Install(unprotectedMux)
 
-	informerFactory := informers.NewSharedInformerFactory(c.PrivilegedKubeClient, 10*time.Minute)
+	informerFactory := informers.NewSharedInformerFactory(nil, c.PrivilegedKubeClient, 10*time.Minute)
 	subjectAccessEvaluator := rbacauthorizer.NewSubjectAccessEvaluator(
 		informerFactory.Roles().Lister(),
 		informerFactory.RoleBindings().Lister(),
@@ -132,24 +125,22 @@ type handlerChainConfig struct {
 }
 
 func (h *handlerChainConfig) handlerChain(apiHandler http.Handler, c *genericapiserver.Config) (secure, insecure http.Handler) {
-	attributeGetter := apiserverfilters.NewRequestAttributeGetter(c.RequestContextMapper)
-
-	handler := apiserverfilters.WithAuthorization(apiHandler, attributeGetter, c.Authorizer)
+	handler := apiserverfilters.WithAuthorization(apiHandler, c.RequestContextMapper, c.Authorizer)
 
 	// this mux is NOT protected by authorization, but DOES have authentication information
 	// this is so that everyone can hit these endpoints, but we have the user information for proxy cases
 	handler = WithUnprotectedMux(handler, h.unprotectedMux)
 
 	handler = apiserverfilters.WithImpersonation(handler, c.RequestContextMapper, c.Authorizer)
-	handler = apiserverfilters.WithAudit(handler, attributeGetter, os.Stdout)
+	handler = apiserverfilters.WithAudit(handler, c.RequestContextMapper, os.Stdout)
 	handler = authhandlers.WithAuthentication(handler, c.RequestContextMapper, c.Authenticator, authhandlers.Unauthorized(c.SupportsBasicAuth))
 
 	handler = genericfilters.WithCORS(handler, c.CorsAllowedOriginList, nil, nil, nil, "true")
 	handler = genericfilters.WithPanicRecovery(handler, c.RequestContextMapper)
 	handler = apiserverfilters.WithRequestInfo(handler, genericapiserver.NewRequestInfoResolver(c), c.RequestContextMapper)
 	handler = kapi.WithRequestContext(handler, c.RequestContextMapper)
-	handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.LongRunningFunc)
-	handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.LongRunningFunc)
+	handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.RequestContextMapper, c.LongRunningFunc)
+	handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.MaxMutatingRequestsInFlight, c.RequestContextMapper, c.LongRunningFunc)
 
 	return handler, nil
 }

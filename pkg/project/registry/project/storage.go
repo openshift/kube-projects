@@ -7,7 +7,7 @@ import (
 	kerrors "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/api/rest"
-	"k8s.io/kubernetes/pkg/api/unversioned"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/client/cache"
 	coreclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
 	"k8s.io/kubernetes/pkg/fields"
@@ -104,8 +104,8 @@ func (s *REST) Watch(ctx kapi.Context, options *kapi.ListOptions) (watch.Interfa
 var _ = rest.Getter(&REST{})
 
 // Get retrieves a Project by name
-func (s *REST) Get(ctx kapi.Context, name string) (runtime.Object, error) {
-	namespace, err := s.client.Get(name)
+func (s *REST) Get(ctx kapi.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
+	namespace, err := s.client.Get(name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func (s *REST) Create(ctx kapi.Context, obj runtime.Object) (runtime.Object, err
 var _ = rest.Updater(&REST{})
 
 func (s *REST) Update(ctx kapi.Context, name string, objInfo rest.UpdatedObjectInfo) (runtime.Object, bool, error) {
-	oldObj, err := s.Get(ctx, name)
+	oldObj, err := s.Get(ctx, name, nil)
 	if err != nil {
 		return nil, false, err
 	}
@@ -167,7 +167,7 @@ var _ = rest.Deleter(&REST{})
 
 // Delete deletes a Project specified by its name
 func (s *REST) Delete(ctx kapi.Context, name string) (runtime.Object, error) {
-	return &unversioned.Status{Status: unversioned.StatusSuccess}, s.client.Delete(name, nil)
+	return &metav1.Status{Status: metav1.StatusSuccess}, s.client.Delete(name, nil)
 }
 
 // decoratorFunc can mutate the provided object prior to being returned.
