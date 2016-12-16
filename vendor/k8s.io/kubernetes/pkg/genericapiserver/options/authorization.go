@@ -22,7 +22,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	authorizationclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/authorization/internalversion"
+	authorizationclient "k8s.io/kubernetes/pkg/client/clientset_generated/clientset/typed/authorization/v1beta1"
 	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
 	"k8s.io/kubernetes/pkg/controller/informers"
 	"k8s.io/kubernetes/pkg/genericapiserver/authorizer"
@@ -36,12 +36,11 @@ type BuiltInAuthorizationOptions struct {
 	WebhookConfigFile           string
 	WebhookCacheAuthorizedTTL   time.Duration
 	WebhookCacheUnauthorizedTTL time.Duration
-	RBACSuperUser               string
 }
 
 func NewBuiltInAuthorizationOptions() *BuiltInAuthorizationOptions {
 	return &BuiltInAuthorizationOptions{
-		Mode: "AlwaysAllow",
+		Mode: authorizer.ModeAlwaysAllow,
 		WebhookCacheAuthorizedTTL:   5 * time.Minute,
 		WebhookCacheUnauthorizedTTL: 30 * time.Second,
 	}
@@ -72,20 +71,25 @@ func (s *BuiltInAuthorizationOptions) AddFlags(fs *pflag.FlagSet) {
 		"authorization-webhook-cache-unauthorized-ttl", s.WebhookCacheUnauthorizedTTL,
 		"The duration to cache 'unauthorized' responses from the webhook authorizer. Default is 30s.")
 
-	fs.StringVar(&s.RBACSuperUser, "authorization-rbac-super-user", s.RBACSuperUser, ""+
+	fs.String("authorization-rbac-super-user", "", ""+
 		"If specified, a username which avoids RBAC authorization checks and role binding "+
 		"privilege escalation checks, to be used with --authorization-mode=RBAC.")
+	fs.MarkDeprecated("authorization-rbac-super-user", "Removed during alpha to beta.  The 'system:masters' group has privileged access.")
 
 }
 
 func (s *BuiltInAuthorizationOptions) ToAuthorizationConfig(informerFactory informers.SharedInformerFactory) authorizer.AuthorizationConfig {
+	modes := []string{}
+	if len(s.Mode) > 0 {
+		modes = strings.Split(s.Mode, ",")
+	}
+
 	return authorizer.AuthorizationConfig{
-		AuthorizationModes:          strings.Split(s.Mode, ","),
+		AuthorizationModes:          modes,
 		PolicyFile:                  s.PolicyFile,
 		WebhookConfigFile:           s.WebhookConfigFile,
 		WebhookCacheAuthorizedTTL:   s.WebhookCacheAuthorizedTTL,
 		WebhookCacheUnauthorizedTTL: s.WebhookCacheUnauthorizedTTL,
-		RBACSuperUser:               s.RBACSuperUser,
 		InformerFactory:             informerFactory,
 	}
 }
@@ -94,7 +98,7 @@ func (s *BuiltInAuthorizationOptions) ToAuthorizationConfig(informerFactory info
 // the root kube API server
 type DelegatingAuthorizationOptions struct {
 	// RemoteKubeConfigFile is the file to use to connect to a "normal" kube API server which hosts the
-	// TokenAcessReview.authentication.k8s.io endpoint for checking tokens.
+	// SubjectAccessReview.authorization.k8s.io endpoint for checking tokens.
 	RemoteKubeConfigFile string
 
 	// AllowCacheTTL is the length of time that a successful authorization response will be cached
@@ -107,8 +111,9 @@ type DelegatingAuthorizationOptions struct {
 
 func NewDelegatingAuthorizationOptions() *DelegatingAuthorizationOptions {
 	return &DelegatingAuthorizationOptions{
-		AllowCacheTTL: 5 * time.Minute,
-		DenyCacheTTL:  30 * time.Second,
+		// very low for responsiveness, but high enough to handle storms
+		AllowCacheTTL: 10 * time.Second,
+		DenyCacheTTL:  10 * time.Second,
 	}
 }
 
@@ -121,16 +126,24 @@ func (s *DelegatingAuthorizationOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&s.RemoteKubeConfigFile, "authorization-kubeconfig", s.RemoteKubeConfigFile, ""+
 		"kubeconfig file pointing at the 'core' kubernetes server with enough rights to create "+
 		" subjectaccessreviews.authorization.k8s.io.")
+
+	fs.DurationVar(&s.AllowCacheTTL, "authorization-webhook-cache-authorized-ttl",
+		s.AllowCacheTTL,
+		"The duration to cache 'authorized' responses from the webhook authorizer.")
+
+	fs.DurationVar(&s.DenyCacheTTL,
+		"authorization-webhook-cache-unauthorized-ttl", s.DenyCacheTTL,
+		"The duration to cache 'unauthorized' responses from the webhook authorizer.")
 }
 
 func (s *DelegatingAuthorizationOptions) ToAuthorizationConfig() (authorizer.DelegatingAuthorizerConfig, error) {
-	tokenClient, err := s.newSubjectAccessReview()
+	sarClient, err := s.newSubjectAccessReview()
 	if err != nil {
 		return authorizer.DelegatingAuthorizerConfig{}, err
 	}
 
 	ret := authorizer.DelegatingAuthorizerConfig{
-		SubjectAccessReviewClient: tokenClient,
+		SubjectAccessReviewClient: sarClient,
 		AllowCacheTTL:             s.AllowCacheTTL,
 		DenyCacheTTL:              s.DenyCacheTTL,
 	}
@@ -142,14 +155,16 @@ func (s *DelegatingAuthorizationOptions) newSubjectAccessReview() (authorization
 		return nil, nil
 	}
 
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	loadingRules.ExplicitPath = s.RemoteKubeConfigFile
+	loadingRules := &clientcmd.ClientConfigLoadingRules{ExplicitPath: s.RemoteKubeConfigFile}
 	loader := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &clientcmd.ConfigOverrides{})
 
 	clientConfig, err := loader.ClientConfig()
 	if err != nil {
 		return nil, err
 	}
+	// set high qps/burst limits since this will effectively limit API server responsiveness
+	clientConfig.QPS = 200
+	clientConfig.Burst = 400
 
 	client, err := authorizationclient.NewForConfig(clientConfig)
 	if err != nil {

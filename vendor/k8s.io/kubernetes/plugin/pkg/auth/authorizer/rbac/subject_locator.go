@@ -26,7 +26,7 @@ import (
 )
 
 type RoleToRuleMapper interface {
-	// GetRoleReferenceRules attempts to resolve the role reference of a RoleBinding or ClusterRoleBinding.  The passed namespace should be the namepsace
+	// GetRoleReferenceRules attempts to resolve the role reference of a RoleBinding or ClusterRoleBinding.  The passed namespace should be the namespace
 	// of the role binding, the empty string if a cluster role binding.
 	GetRoleReferenceRules(roleRef rbac.RoleRef, namespace string) ([]rbac.PolicyRule, error)
 }
@@ -51,10 +51,12 @@ func NewSubjectAccessEvaluator(roles validation.RoleGetter, roleBindings validat
 	return subjectLocator
 }
 
+// AllowedSubjects returns the subjects that can perform an action and any errors encountered while computing the list.
+// It is possible to have both subjects and errors returned if some rolebindings couldn't be resolved, but others could be.
 func (r *SubjectAccessEvaluator) AllowedSubjects(requestAttributes authorizer.Attributes) ([]rbac.Subject, error) {
 	subjects := []rbac.Subject{{Kind: rbac.GroupKind, Name: user.SystemPrivilegedGroup}}
 	if len(r.superUser) > 0 {
-		subjects = append(subjects, rbac.Subject{Kind: rbac.UserKind, Name: r.superUser})
+		subjects = append(subjects, rbac.Subject{Kind: rbac.UserKind, APIVersion: "v1alpha1", Name: r.superUser})
 	}
 	errorlist := []error{}
 
@@ -65,6 +67,9 @@ func (r *SubjectAccessEvaluator) AllowedSubjects(requestAttributes authorizer.At
 		for _, clusterRoleBinding := range clusterRoleBindings {
 			rules, err := r.roleToRuleMapper.GetRoleReferenceRules(clusterRoleBinding.RoleRef, "")
 			if err != nil {
+				// if we have an error, just keep track of it and keep processing.  Since rules are additive,
+				// missing a reference is bad, but we can continue with other rolebindings and still have a list
+				// that does not contain any invalid values
 				errorlist = append(errorlist, err)
 			}
 			if RulesAllow(requestAttributes, rules...) {
@@ -81,6 +86,9 @@ func (r *SubjectAccessEvaluator) AllowedSubjects(requestAttributes authorizer.At
 			for _, roleBinding := range roleBindings {
 				rules, err := r.roleToRuleMapper.GetRoleReferenceRules(roleBinding.RoleRef, namespace)
 				if err != nil {
+					// if we have an error, just keep track of it and keep processing.  Since rules are additive,
+					// missing a reference is bad, but we can continue with other rolebindings and still have a list
+					// that does not contain any invalid values
 					errorlist = append(errorlist, err)
 				}
 				if RulesAllow(requestAttributes, rules...) {
