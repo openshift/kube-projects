@@ -446,7 +446,7 @@ func (ac *AuthorizationCache) List(userInfo user.Info) (*kapi.NamespaceList, err
 		if err != nil {
 			return nil, err
 		}
-		if exists {
+		if exists && namespaceObj != nil {
 			namespace := *namespaceObj.(*kapi.Namespace)
 			namespaceList.Items = append(namespaceList.Items, namespace)
 		}

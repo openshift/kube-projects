@@ -10,11 +10,13 @@ import (
 	"k8s.io/kubernetes/pkg/api/rest"
 	apiserverfilters "k8s.io/kubernetes/pkg/apiserver/filters"
 	authhandlers "k8s.io/kubernetes/pkg/auth/handlers"
+	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/controller/informers"
 	"k8s.io/kubernetes/pkg/genericapiserver"
 	genericfilters "k8s.io/kubernetes/pkg/genericapiserver/filters"
 	"k8s.io/kubernetes/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/version"
 	rbacauthorizer "k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac"
 
 	"github.com/openshift/kube-projects/pkg/apiserver/bootstraproutes"
@@ -28,7 +30,8 @@ import (
 type Config struct {
 	GenericConfig *genericapiserver.Config
 
-	PrivilegedKubeClient internalclientset.Interface
+	PrivilegedKubeClient         internalclientset.Interface
+	PrivilegedExternalKubeClient clientset.Interface
 
 	AuthUser   string
 	ServerUser string
@@ -45,6 +48,8 @@ type completedConfig struct {
 
 // Complete fills in any fields not set that are required to have valid data. It's mutating the receiver.
 func (c *Config) Complete() completedConfig {
+	c.GenericConfig.Version = &version.Info{Major: "1"}
+
 	c.GenericConfig.Complete()
 
 	return completedConfig{c}
@@ -59,6 +64,9 @@ func (c *Config) SkipComplete() completedConfig {
 func (c completedConfig) New() (*ProjectServer, error) {
 	if c.PrivilegedKubeClient == nil {
 		return nil, fmt.Errorf("missing PrivilegedKubeClient")
+	}
+	if c.PrivilegedExternalKubeClient == nil {
+		return nil, fmt.Errorf("missing PrivilegedExternalKubeClient")
 	}
 
 	unprotectedMux := http.NewServeMux()
@@ -81,7 +89,7 @@ func (c completedConfig) New() (*ProjectServer, error) {
 		ServiceName: "api",
 	}.Install(unprotectedMux)
 
-	informerFactory := informers.NewSharedInformerFactory(nil, c.PrivilegedKubeClient, 10*time.Minute)
+	informerFactory := informers.NewSharedInformerFactory(c.PrivilegedExternalKubeClient, c.PrivilegedKubeClient, 10*time.Minute)
 	subjectAccessEvaluator := rbacauthorizer.NewSubjectAccessEvaluator(
 		informerFactory.Roles().Lister(),
 		informerFactory.RoleBindings().Lister(),
@@ -137,10 +145,10 @@ func (h *handlerChainConfig) handlerChain(apiHandler http.Handler, c *genericapi
 
 	handler = genericfilters.WithCORS(handler, c.CorsAllowedOriginList, nil, nil, nil, "true")
 	handler = genericfilters.WithPanicRecovery(handler, c.RequestContextMapper)
-	handler = apiserverfilters.WithRequestInfo(handler, genericapiserver.NewRequestInfoResolver(c), c.RequestContextMapper)
-	handler = kapi.WithRequestContext(handler, c.RequestContextMapper)
 	handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.RequestContextMapper, c.LongRunningFunc)
 	handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.MaxMutatingRequestsInFlight, c.RequestContextMapper, c.LongRunningFunc)
+	handler = apiserverfilters.WithRequestInfo(handler, genericapiserver.NewRequestInfoResolver(c), c.RequestContextMapper)
+	handler = kapi.WithRequestContext(handler, c.RequestContextMapper)
 
 	return handler, nil
 }

@@ -6,8 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
+	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/genericapiserver"
 	"k8s.io/kubernetes/pkg/genericapiserver/filters"
 	genericoptions "k8s.io/kubernetes/pkg/genericapiserver/options"
@@ -40,6 +41,7 @@ func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
 		Authentication: genericoptions.NewDelegatingAuthenticationOptions(),
 		Authorization:  genericoptions.NewDelegatingAuthorizationOptions(),
 	}
+	o.SecureServing.ServingOptions.BindPort = 443
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -96,23 +98,25 @@ func (o ProjectServerOptions) RunProjectServer() error {
 	)
 
 	// read the kubeconfig file to use for proxying requests
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	loadingRules.ExplicitPath = o.KubeConfig
-	loader := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &clientcmd.ConfigOverrides{})
-	kubeClientConfig, err := loader.ClientConfig()
+	kubeClientConfig, err := restclient.InClusterConfig()
 	if err != nil {
 		return err
 	}
-	clientset, err := internalclientset.NewForConfig(kubeClientConfig)
+	internalclientset, err := internalclientset.NewForConfig(kubeClientConfig)
+	if err != nil {
+		return err
+	}
+	clientset, err := clientset.NewForConfig(kubeClientConfig)
 	if err != nil {
 		return err
 	}
 
 	config := apiserver.Config{
-		GenericConfig:        genericAPIServerConfig,
-		PrivilegedKubeClient: clientset,
-		AuthUser:             o.AuthUser,
-		ServerUser:           o.ServerUser,
+		GenericConfig:                genericAPIServerConfig,
+		PrivilegedKubeClient:         internalclientset,
+		PrivilegedExternalKubeClient: clientset,
+		AuthUser:                     o.AuthUser,
+		ServerUser:                   o.ServerUser,
 	}
 
 	server, err := config.Complete().New()
