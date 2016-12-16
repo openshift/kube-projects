@@ -6,16 +6,17 @@ import (
 	core "k8s.io/kubernetes/pkg/client/testing/core"
 )
 
-type FakeProject struct {
+type FakeProjectApi struct {
 	*core.Fake
 }
 
-func (c *FakeProject) Projects(namespace string) api.ProjectInterface {
+func (c *FakeProjectApi) Projects(namespace string) api.ProjectInterface {
 	return &FakeProjects{c, namespace}
 }
 
-// GetRESTClient returns a RESTClient that is used to communicate
+// RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *FakeProject) GetRESTClient() *restclient.RESTClient {
-	return nil
+func (c *FakeProjectApi) RESTClient() restclient.Interface {
+	var ret *restclient.RESTClient
+	return ret
 }

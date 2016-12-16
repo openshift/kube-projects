@@ -11,22 +11,33 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
-	Project() apiproject.ProjectInterface
+	ProjectApi() apiproject.ProjectApiInterface
+	// Deprecated: please explicitly pick a version if possible.
+	Project() apiproject.ProjectApiInterface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	*apiproject.ProjectClient
+	*apiproject.ProjectApiClient
 }
 
-// Project retrieves the ProjectClient
-func (c *Clientset) Project() apiproject.ProjectInterface {
+// ProjectApi retrieves the ProjectApiClient
+func (c *Clientset) ProjectApi() apiproject.ProjectApiInterface {
 	if c == nil {
 		return nil
 	}
-	return c.ProjectClient
+	return c.ProjectApiClient
+}
+
+// Deprecated: Project retrieves the default version of ProjectClient.
+// Please explicitly pick a version.
+func (c *Clientset) Project() apiproject.ProjectApiInterface {
+	if c == nil {
+		return nil
+	}
+	return c.ProjectApiClient
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -42,7 +53,7 @@ func NewForConfig(c *restclient.Config) (*Clientset, error) {
 	}
 	var clientset Clientset
 	var err error
-	clientset.ProjectClient, err = apiproject.NewForConfig(&configShallowCopy)
+	clientset.ProjectApiClient, err = apiproject.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -59,16 +70,16 @@ func NewForConfig(c *restclient.Config) (*Clientset, error) {
 // panics if there is an error in the config.
 func NewForConfigOrDie(c *restclient.Config) *Clientset {
 	var clientset Clientset
-	clientset.ProjectClient = apiproject.NewForConfigOrDie(c)
+	clientset.ProjectApiClient = apiproject.NewForConfigOrDie(c)
 
 	clientset.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &clientset
 }
 
 // New creates a new Clientset for the given RESTClient.
-func New(c *restclient.RESTClient) *Clientset {
+func New(c restclient.Interface) *Clientset {
 	var clientset Clientset
-	clientset.ProjectClient = apiproject.New(c)
+	clientset.ProjectApiClient = apiproject.New(c)
 
 	clientset.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &clientset

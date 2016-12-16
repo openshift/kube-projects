@@ -3,20 +3,21 @@ package fake
 import (
 	api "github.com/openshift/kube-projects/pkg/project/api"
 	pkg_api "k8s.io/kubernetes/pkg/api"
-	unversioned "k8s.io/kubernetes/pkg/api/unversioned"
 	v1 "k8s.io/kubernetes/pkg/api/v1"
+	meta_v1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	core "k8s.io/kubernetes/pkg/client/testing/core"
 	labels "k8s.io/kubernetes/pkg/labels"
+	schema "k8s.io/kubernetes/pkg/runtime/schema"
 	watch "k8s.io/kubernetes/pkg/watch"
 )
 
 // FakeProjects implements ProjectInterface
 type FakeProjects struct {
-	Fake *FakeProject
+	Fake *FakeProjectApi
 	ns   string
 }
 
-var projectsResource = unversioned.GroupVersionResource{Group: "project", Version: "api", Resource: "projects"}
+var projectsResource = schema.GroupVersionResource{Group: "project", Version: "api", Resource: "projects"}
 
 func (c *FakeProjects) Create(project *api.Project) (result *api.Project, err error) {
 	obj, err := c.Fake.
@@ -38,6 +39,16 @@ func (c *FakeProjects) Update(project *api.Project) (result *api.Project, err er
 	return obj.(*api.Project), err
 }
 
+func (c *FakeProjects) UpdateStatus(project *api.Project) (*api.Project, error) {
+	obj, err := c.Fake.
+		Invokes(core.NewUpdateSubresourceAction(projectsResource, "status", c.ns, project), &api.Project{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*api.Project), err
+}
+
 func (c *FakeProjects) Delete(name string, options *v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(core.NewDeleteAction(projectsResource, c.ns, name), &api.Project{})
@@ -52,7 +63,7 @@ func (c *FakeProjects) DeleteCollection(options *v1.DeleteOptions, listOptions v
 	return err
 }
 
-func (c *FakeProjects) Get(name string) (result *api.Project, err error) {
+func (c *FakeProjects) Get(name string, options meta_v1.GetOptions) (result *api.Project, err error) {
 	obj, err := c.Fake.
 		Invokes(core.NewGetAction(projectsResource, c.ns, name), &api.Project{})
 

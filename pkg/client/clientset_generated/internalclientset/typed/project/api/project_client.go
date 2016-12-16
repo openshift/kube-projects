@@ -1,28 +1,30 @@
 package api
 
 import (
+	fmt "fmt"
 	api "k8s.io/kubernetes/pkg/api"
 	registered "k8s.io/kubernetes/pkg/apimachinery/registered"
 	restclient "k8s.io/kubernetes/pkg/client/restclient"
+	schema "k8s.io/kubernetes/pkg/runtime/schema"
 	serializer "k8s.io/kubernetes/pkg/runtime/serializer"
 )
 
-type ProjectInterface interface {
-	GetRESTClient() *restclient.RESTClient
+type ProjectApiInterface interface {
+	RESTClient() restclient.Interface
 	ProjectsGetter
 }
 
-// ProjectClient is used to interact with features provided by the Project group.
-type ProjectClient struct {
-	*restclient.RESTClient
+// ProjectApiClient is used to interact with features provided by the k8s.io/kubernetes/pkg/apimachinery/registered.Group group.
+type ProjectApiClient struct {
+	restClient restclient.Interface
 }
 
-func (c *ProjectClient) Projects(namespace string) ProjectInterface {
+func (c *ProjectApiClient) Projects(namespace string) ProjectInterface {
 	return newProjects(c, namespace)
 }
 
-// NewForConfig creates a new ProjectClient for the given config.
-func NewForConfig(c *restclient.Config) (*ProjectClient, error) {
+// NewForConfig creates a new ProjectApiClient for the given config.
+func NewForConfig(c *restclient.Config) (*ProjectApiClient, error) {
 	config := *c
 	if err := setConfigDefaults(&config); err != nil {
 		return nil, err
@@ -31,12 +33,12 @@ func NewForConfig(c *restclient.Config) (*ProjectClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ProjectClient{client}, nil
+	return &ProjectApiClient{client}, nil
 }
 
-// NewForConfigOrDie creates a new ProjectClient for the given config and
+// NewForConfigOrDie creates a new ProjectApiClient for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *restclient.Config) *ProjectClient {
+func NewForConfigOrDie(c *restclient.Config) *ProjectApiClient {
 	client, err := NewForConfig(c)
 	if err != nil {
 		panic(err)
@@ -44,37 +46,37 @@ func NewForConfigOrDie(c *restclient.Config) *ProjectClient {
 	return client
 }
 
-// New creates a new ProjectClient for the given RESTClient.
-func New(c *restclient.RESTClient) *ProjectClient {
-	return &ProjectClient{c}
+// New creates a new ProjectApiClient for the given RESTClient.
+func New(c restclient.Interface) *ProjectApiClient {
+	return &ProjectApiClient{c}
 }
 
 func setConfigDefaults(config *restclient.Config) error {
-	// if project group is not registered, return an error
-	g, err := registered.Group("project")
+	gv, err := schema.ParseGroupVersion("project/api")
 	if err != nil {
 		return err
+	}
+	// if project/api is not enabled, return an error
+	if !registered.IsEnabledVersion(gv) {
+		return fmt.Errorf("project/api is not enabled")
 	}
 	config.APIPath = "/apis"
 	if config.UserAgent == "" {
 		config.UserAgent = restclient.DefaultKubernetesUserAgent()
 	}
-	// TODO: Unconditionally set the config.Version, until we fix the config.
-	//if config.Version == "" {
-	copyGroupVersion := g.GroupVersion
+	copyGroupVersion := gv
 	config.GroupVersion = &copyGroupVersion
-	//}
 
 	config.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: api.Codecs}
 
 	return nil
 }
 
-// GetRESTClient returns a RESTClient that is used to communicate
+// RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *ProjectClient) GetRESTClient() *restclient.RESTClient {
+func (c *ProjectApiClient) RESTClient() restclient.Interface {
 	if c == nil {
 		return nil
 	}
-	return c.RESTClient
+	return c.restClient
 }
