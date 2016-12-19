@@ -12,6 +12,7 @@ import (
 	authhandlers "k8s.io/kubernetes/pkg/auth/handlers"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
+	kubeinformers "k8s.io/kubernetes/pkg/client/informers/informers_generated"
 	"k8s.io/kubernetes/pkg/controller/informers"
 	"k8s.io/kubernetes/pkg/genericapiserver"
 	genericfilters "k8s.io/kubernetes/pkg/genericapiserver/filters"
@@ -89,6 +90,8 @@ func (c completedConfig) New() (*ProjectServer, error) {
 		ServiceName: "api",
 	}.Install(unprotectedMux)
 
+	kubeInformers := kubeinformers.NewSharedInformerFactory(c.PrivilegedKubeClient, c.PrivilegedExternalKubeClient, 10*time.Minute)
+
 	informerFactory := informers.NewSharedInformerFactory(c.PrivilegedExternalKubeClient, c.PrivilegedKubeClient, 10*time.Minute)
 	subjectAccessEvaluator := rbacauthorizer.NewSubjectAccessEvaluator(
 		informerFactory.Roles().Lister(),
@@ -99,7 +102,7 @@ func (c completedConfig) New() (*ProjectServer, error) {
 	)
 	authCache := authcache.NewAuthorizationCache(
 		authcache.NewReviewer(subjectAccessEvaluator),
-		informerFactory.Namespaces(),
+		kubeInformers.Core().InternalVersion().Namespaces(),
 		informerFactory.ClusterRoles(), informerFactory.ClusterRoleBindings(), informerFactory.Roles(), informerFactory.RoleBindings(),
 	)
 
@@ -118,6 +121,7 @@ func (c completedConfig) New() (*ProjectServer, error) {
 
 	m.GenericAPIServer.AddPostStartHook("start-informers", func(context genericapiserver.PostStartHookContext) error {
 		informerFactory.Start(wait.NeverStop)
+		kubeInformers.Start(wait.NeverStop)
 		return nil
 	})
 	m.GenericAPIServer.AddPostStartHook("start-authorization-cache", func(context genericapiserver.PostStartHookContext) error {

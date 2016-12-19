@@ -7,9 +7,12 @@ import (
 	"time"
 
 	kapi "k8s.io/kubernetes/pkg/api"
+	kapierrors "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/apis/rbac"
 	"k8s.io/kubernetes/pkg/auth/user"
 	"k8s.io/kubernetes/pkg/client/cache"
+	kubecoreinformers "k8s.io/kubernetes/pkg/client/informers/informers_generated/core/internalversion"
+	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	"k8s.io/kubernetes/pkg/controller/informers"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/serviceaccount"
@@ -117,7 +120,7 @@ type AuthorizationCache struct {
 	// allKnownNamespaces we track all the known namespaces, so we can detect deletes.
 	// TODO remove this in favor of a list/watch mechanism for projects
 	allKnownNamespaces        sets.String
-	namespaceLister           *cache.IndexerToNamespaceLister
+	namespaceLister           corelisters.NamespaceLister
 	lastSyncResourceVersioner LastSyncResourceVersioner
 
 	clusterRoleLister               cache.ClusterRoleLister
@@ -146,7 +149,7 @@ type AuthorizationCache struct {
 
 // NewAuthorizationCache creates a new AuthorizationCache
 func NewAuthorizationCache(reviewer Reviewer,
-	namespaceInformer informers.NamespaceInformer,
+	namespaceInformer kubecoreinformers.NamespaceInformer,
 	clusterRoles informers.ClusterRoleInformer,
 	clusterRoleBindings informers.ClusterRoleBindingInformer,
 	roles informers.RoleInformer,
@@ -442,14 +445,14 @@ func (ac *AuthorizationCache) List(userInfo user.Info) (*kapi.NamespaceList, err
 
 	namespaceList := &kapi.NamespaceList{}
 	for key := range keys {
-		namespaceObj, exists, err := ac.namespaceLister.GetByKey(key)
+		namespace, err := ac.namespaceLister.Get(key)
+		if kapierrors.IsNotFound(err) {
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
-		if exists && namespaceObj != nil {
-			namespace := *namespaceObj.(*kapi.Namespace)
-			namespaceList.Items = append(namespaceList.Items, namespace)
-		}
+		namespaceList.Items = append(namespaceList.Items, *namespace)
 	}
 	return namespaceList, nil
 }
