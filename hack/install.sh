@@ -13,8 +13,6 @@ mkdir -p "${CERT_DIR}" &>/dev/null || mkdir -p "${CERT_DIR}"
 
 # start_apiserver relies on certificates created by start_apiserver
 function start_projects {
-	${OS_ROOT}/hack/build-image.sh
-
 	kube::util::create_signing_certkey "" "${CERT_DIR}" "apiserver" '"server auth"'
 	# sign the apiserver cert to be good for the local node too, so that we can trust it
 	kube::util::create_serving_certkey "" "${CERT_DIR}" "apiserver-ca" apiserver api.projects.openshift.io.svc "localhost"

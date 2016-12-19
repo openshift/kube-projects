@@ -34,7 +34,7 @@ items:
         containers:
         - name: apiserver
           image: openshift/origin-kube-projects:latest
-          imagePullPolicy: Never
+          imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3
             httpGet:
