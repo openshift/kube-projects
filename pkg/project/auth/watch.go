@@ -8,7 +8,7 @@ import (
 	"github.com/golang/glog"
 
 	kapi "k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/unversioned"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/auth/user"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/storage"
@@ -221,8 +221,8 @@ func (w *userProjectWatcher) Watch() {
 func makeErrorEvent(err error) watch.Event {
 	return watch.Event{
 		Type: watch.Error,
-		Object: &unversioned.Status{
-			Status:  unversioned.StatusFailure,
+		Object: &metav1.Status{
+			Status:  metav1.StatusFailure,
 			Message: err.Error(),
 		},
 	}

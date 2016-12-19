@@ -20,12 +20,12 @@ import (
 	"time"
 
 	"k8s.io/kubernetes/pkg/auth/authorizer"
-	authorizationclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/authorization/internalversion"
+	authorizationclient "k8s.io/kubernetes/pkg/client/clientset_generated/clientset/typed/authorization/v1beta1"
 	webhooksar "k8s.io/kubernetes/plugin/pkg/auth/authorizer/webhook"
 )
 
 // DelegatingAuthorizerConfig is the minimal configuration needed to create an authenticator
-// built to delegate authentication to a kube API server
+// built to delegate authorization to a kube API server
 type DelegatingAuthorizerConfig struct {
 	SubjectAccessReviewClient authorizationclient.SubjectAccessReviewInterface
 

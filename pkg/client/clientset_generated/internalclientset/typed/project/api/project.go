@@ -4,6 +4,8 @@ import (
 	api "github.com/openshift/kube-projects/pkg/project/api"
 	pkg_api "k8s.io/kubernetes/pkg/api"
 	v1 "k8s.io/kubernetes/pkg/api/v1"
+	meta_v1 "k8s.io/kubernetes/pkg/apis/meta/v1"
+	restclient "k8s.io/kubernetes/pkg/client/restclient"
 	watch "k8s.io/kubernetes/pkg/watch"
 )
 
@@ -17,9 +19,10 @@ type ProjectsGetter interface {
 type ProjectInterface interface {
 	Create(*api.Project) (*api.Project, error)
 	Update(*api.Project) (*api.Project, error)
+	UpdateStatus(*api.Project) (*api.Project, error)
 	Delete(name string, options *v1.DeleteOptions) error
 	DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error
-	Get(name string) (*api.Project, error)
+	Get(name string, options meta_v1.GetOptions) (*api.Project, error)
 	List(opts v1.ListOptions) (*api.ProjectList, error)
 	Watch(opts v1.ListOptions) (watch.Interface, error)
 	Patch(name string, pt pkg_api.PatchType, data []byte, subresources ...string) (result *api.Project, err error)
@@ -28,14 +31,14 @@ type ProjectInterface interface {
 
 // projects implements ProjectInterface
 type projects struct {
-	client *ProjectClient
+	client restclient.Interface
 	ns     string
 }
 
 // newProjects returns a Projects
-func newProjects(c *ProjectClient, namespace string) *projects {
+func newProjects(c *ProjectApiClient, namespace string) *projects {
 	return &projects{
-		client: c,
+		client: c.RESTClient(),
 		ns:     namespace,
 	}
 }
@@ -65,6 +68,22 @@ func (c *projects) Update(project *api.Project) (result *api.Project, err error)
 	return
 }
 
+// UpdateStatus was generated because the type contains a Status member.
+// Add a +genclientstatus=false comment above the type to avoid generating UpdateStatus().
+
+func (c *projects) UpdateStatus(project *api.Project) (result *api.Project, err error) {
+	result = &api.Project{}
+	err = c.client.Put().
+		Namespace(c.ns).
+		Resource("projects").
+		Name(project.Name).
+		SubResource("status").
+		Body(project).
+		Do().
+		Into(result)
+	return
+}
+
 // Delete takes name of the project and deletes it. Returns an error if one occurs.
 func (c *projects) Delete(name string, options *v1.DeleteOptions) error {
 	return c.client.Delete().
@@ -88,12 +107,13 @@ func (c *projects) DeleteCollection(options *v1.DeleteOptions, listOptions v1.Li
 }
 
 // Get takes name of the project, and returns the corresponding project object, and an error if there is any.
-func (c *projects) Get(name string) (result *api.Project, err error) {
+func (c *projects) Get(name string, options meta_v1.GetOptions) (result *api.Project, err error) {
 	result = &api.Project{}
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("projects").
 		Name(name).
+		VersionedParams(&options, pkg_api.ParameterCodec).
 		Do().
 		Into(result)
 	return

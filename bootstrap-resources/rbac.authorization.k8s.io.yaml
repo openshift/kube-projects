@@ -1,0 +1,172 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRole
+  metadata:
+    name: project.openshift.io:admin
+  rules:
+  - apiGroups:
+    - "project.openshift.io"
+    resources:
+    - projects
+    verbs:
+    - create
+    - delete
+    - deletecollection
+    - get
+    - list
+    - patch
+    - update
+    - watch
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRole
+  metadata:
+    name: project.openshift.io:editor
+  rules:
+  - apiGroups:
+    - "project.openshift.io"
+    resources:
+    - projects
+    verbs:
+    - get
+    - list
+    - watch
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRole
+  metadata:
+    name: project.openshift.io:viewer
+  rules:
+  - apiGroups:
+    - "project.openshift.io"
+    resources:
+    - projects
+    verbs:
+    - get
+    - list
+    - watch
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRole
+  metadata:
+    name: project.openshift.io:basic-user
+  rules:
+  - apiGroups:
+    - "project.openshift.io"
+    resources:
+    - projects
+    - projectrequests
+    verbs:
+    - list
+    - watch
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRole
+  metadata:
+    name: project.openshift.io:self-provisioner
+  rules:
+  - apiGroups:
+    - "project.openshift.io"
+    resources:
+    - projectrequests
+    verbs:
+    - create
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRole
+  metadata:
+    name: project.openshift.io:apiserver
+  rules:
+  - apiGroups:
+    - ""
+    resources:
+    - namespaces
+    verbs:
+    - create
+    - delete
+    - deletecollection
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - "rbac.authorization.k8s.io"
+    resources:
+    - clusterroles
+    - clusterrolebindings
+    - roles
+    - rolebindings
+    verbs:
+    - get
+    - list
+    - watch
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRoleBinding
+  metadata:
+    name: project.openshift.io:system:auth-delegator
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: system:auth-delegator
+  subjects:
+  - kind: ServiceAccount
+    name: apiserver
+    namespace: project-openshift-io
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRoleBinding
+  metadata:
+    name: project.openshift.io:admin
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: admin
+  subjects:
+  - kind: ServiceAccount
+    name: apiserver
+    namespace: project-openshift-io
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRoleBinding
+  metadata:
+    name: project.openshift.io:project.openshift.io:admin
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: project.openshift.io:admin
+  subjects:
+  - kind: ServiceAccount
+    name: apiserver
+    namespace: project-openshift-io
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRoleBinding
+  metadata:
+    name: project.openshift.io:apiserver
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: project.openshift.io:apiserver
+  subjects:
+  - kind: ServiceAccount
+    name: apiserver
+    namespace: project-openshift-io
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRoleBinding
+  metadata:
+    name: project.openshift.io:self-provisioner
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: project.openshift.io:self-provisioner
+  subjects:
+  - kind: Group
+    name: system:authenticated
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRoleBinding
+  metadata:
+    name: project.openshift.io:basic-user
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: project.openshift.io:basic-user
+  subjects:
+  - kind: Group
+    name: system:authenticated
+  - kind: Group
+    name: system:unauthenticated

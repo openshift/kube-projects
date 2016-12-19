@@ -46,7 +46,12 @@ func (c *Clientset) Discovery() discovery.DiscoveryInterface {
 
 var _ clientset.Interface = &Clientset{}
 
-// Project retrieves the ProjectClient
-func (c *Clientset) Project() apiproject.ProjectInterface {
-	return &fakeapiproject.FakeProject{Fake: &c.Fake}
+// ProjectApi retrieves the ProjectApiClient
+func (c *Clientset) ProjectApi() apiproject.ProjectApiInterface {
+	return &fakeapiproject.FakeProjectApi{Fake: &c.Fake}
+}
+
+// Project retrieves the ProjectApiClient
+func (c *Clientset) Project() apiproject.ProjectApiInterface {
+	return &fakeapiproject.FakeProjectApi{Fake: &c.Fake}
 }

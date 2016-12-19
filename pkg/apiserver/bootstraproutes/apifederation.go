@@ -7,8 +7,9 @@ import (
 )
 
 type APIFederation struct {
-	InternalHost string
-	CABundle     []byte
+	Namespace   string
+	ServiceName string
+	CABundle    []byte
 }
 
 // Install adds the Index webservice to the given mux.
@@ -31,7 +32,7 @@ func (i APIFederation) Install(mux *http.ServeMux) {
 }
 
 const apifederationJSON = `{
-	"apiVersion": "apifederation.openshift.io/v1beta1",
+	"apiVersion": "apiregistration.k8s.io/v1alpha1",
 	"kind": "APIServer",
 	"metadata": {
 		"name": "v1.project.openshift.io"
@@ -39,8 +40,11 @@ const apifederationJSON = `{
 	"spec": {
 		"group": "project.openshift.io",
 		"version": "v1",
-		"internalHost": "{{.InternalHost}}",
+		"service": {
+			"namespace": "{{.Namespace}}",
+			"name": "{{.ServiceName}}"
+		}
 		"insecureSkipTLSVerify": true,
-		"priority": 2
+		"priority": 200
 	}
 }`

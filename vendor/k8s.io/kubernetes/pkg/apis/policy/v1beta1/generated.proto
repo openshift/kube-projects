@@ -22,9 +22,10 @@ syntax = 'proto2';
 package k8s.io.kubernetes.pkg.apis.policy.v1beta1;
 
 import "k8s.io/kubernetes/pkg/api/resource/generated.proto";
-import "k8s.io/kubernetes/pkg/api/unversioned/generated.proto";
 import "k8s.io/kubernetes/pkg/api/v1/generated.proto";
+import "k8s.io/kubernetes/pkg/apis/meta/v1/generated.proto";
 import "k8s.io/kubernetes/pkg/runtime/generated.proto";
+import "k8s.io/kubernetes/pkg/runtime/schema/generated.proto";
 import "k8s.io/kubernetes/pkg/util/intstr/generated.proto";
 
 // Package-wide variables from generator "generated".
@@ -54,7 +55,7 @@ message PodDisruptionBudget {
 
 // PodDisruptionBudgetList is a collection of PodDisruptionBudgets.
 message PodDisruptionBudgetList {
-  optional k8s.io.kubernetes.pkg.api.unversioned.ListMeta metadata = 1;
+  optional k8s.io.kubernetes.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   repeated PodDisruptionBudget items = 2;
 }
@@ -69,23 +70,16 @@ message PodDisruptionBudgetSpec {
 
   // Label query over pods whose evictions are managed by the disruption
   // budget.
-  optional k8s.io.kubernetes.pkg.api.unversioned.LabelSelector selector = 2;
+  optional k8s.io.kubernetes.pkg.apis.meta.v1.LabelSelector selector = 2;
 }
 
 // PodDisruptionBudgetStatus represents information about the status of a
 // PodDisruptionBudget. Status may trail the actual state of a system.
 message PodDisruptionBudgetStatus {
-  // Number of pod disruptions that are currently allowed.
-  optional int32 disruptionsAllowed = 1;
-
-  // current number of healthy pods
-  optional int32 currentHealthy = 2;
-
-  // minimum desired number of healthy pods
-  optional int32 desiredHealthy = 3;
-
-  // total number of pods counted by this disruption budget
-  optional int32 expectedPods = 4;
+  // Most recent generation observed when updating this PDB status. PodDisruptionsAllowed and other
+  // status informatio is valid only if observedGeneration equals to PDB's object generation.
+  // +optional
+  optional int64 observedGeneration = 1;
 
   // DisruptedPods contains information about pods whose eviction was
   // processed by the API server eviction subresource handler but has not
@@ -98,6 +92,18 @@ message PodDisruptionBudgetStatus {
   // the list automatically by PodDisruptionBudget controller after some time.
   // If everything goes smooth this map should be empty for the most of the time.
   // Large number of entries in the map may indicate problems with pod deletions.
-  map<string, k8s.io.kubernetes.pkg.api.unversioned.Time> disruptedPods = 5;
+  map<string, k8s.io.kubernetes.pkg.apis.meta.v1.Time> disruptedPods = 2;
+
+  // Number of pod disruptions that are currently allowed.
+  optional int32 disruptionsAllowed = 3;
+
+  // current number of healthy pods
+  optional int32 currentHealthy = 4;
+
+  // minimum desired number of healthy pods
+  optional int32 desiredHealthy = 5;
+
+  // total number of pods counted by this disruption budget
+  optional int32 expectedPods = 6;
 }
 

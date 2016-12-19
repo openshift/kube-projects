@@ -22,13 +22,15 @@ import (
 	"github.com/spf13/pflag"
 
 	"k8s.io/kubernetes/pkg/apiserver/authenticator"
-	authenticationclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/authentication/internalversion"
+	authenticationclient "k8s.io/kubernetes/pkg/client/clientset_generated/clientset/typed/authentication/v1beta1"
+	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
 )
 
 type BuiltInAuthenticationOptions struct {
 	Anonymous       *AnonymousAuthenticationOptions
 	AnyToken        *AnyTokenAuthenticationOptions
+	ClientCert      *ClientCertAuthenticationOptions
 	Keystone        *KeystoneAuthenticationOptions
 	OIDC            *OIDCAuthenticationOptions
 	PasswordFile    *PasswordFileAuthenticationOptions
@@ -85,6 +87,7 @@ func (s *BuiltInAuthenticationOptions) WithAll() *BuiltInAuthenticationOptions {
 	return s.
 		WithAnyonymous().
 		WithAnyToken().
+		WithClientCert().
 		WithKeystone().
 		WithOIDC().
 		WithPasswordFile().
@@ -101,6 +104,11 @@ func (s *BuiltInAuthenticationOptions) WithAnyonymous() *BuiltInAuthenticationOp
 
 func (s *BuiltInAuthenticationOptions) WithAnyToken() *BuiltInAuthenticationOptions {
 	s.AnyToken = &AnyTokenAuthenticationOptions{}
+	return s
+}
+
+func (s *BuiltInAuthenticationOptions) WithClientCert() *BuiltInAuthenticationOptions {
+	s.ClientCert = &ClientCertAuthenticationOptions{}
 	return s
 }
 
@@ -159,6 +167,10 @@ func (s *BuiltInAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 			"If set, your server will be INSECURE.  Any token will be allowed and user information will be parsed "+
 			"from the token as `username/group1,group2`")
 
+	}
+
+	if s.ClientCert != nil {
+		s.ClientCert.AddFlags(fs)
 	}
 
 	if s.Keystone != nil {
@@ -229,16 +241,19 @@ func (s *BuiltInAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 	}
 }
 
-func (s *BuiltInAuthenticationOptions) ToAuthenticationConfig(clientCAFile string) authenticator.AuthenticatorConfig {
-	ret := authenticator.AuthenticatorConfig{
-		ClientCAFile: clientCAFile,
-	}
+func (s *BuiltInAuthenticationOptions) ToAuthenticationConfig() authenticator.AuthenticatorConfig {
+	ret := authenticator.AuthenticatorConfig{}
+
 	if s.Anonymous != nil {
 		ret.Anonymous = s.Anonymous.Allow
 	}
 
 	if s.AnyToken != nil {
 		ret.AnyToken = s.AnyToken.Allow
+	}
+
+	if s.ClientCert != nil {
+		ret.ClientCAFile = s.ClientCert.ClientCA
 	}
 
 	if s.Keystone != nil {
@@ -307,8 +322,8 @@ func (s *RequestHeaderAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 		"by the authorities in --requestheader-client-ca-file is allowed.")
 }
 
-// AuthenticationRequestHeaderConfig returns an authenticator config object for these options
-// if necessary.  nil otherwise.
+// ToAuthenticationRequestHeaderConfig returns a RequestHeaderConfig config object for these options
+// if necessary, nil otherwise.
 func (s *RequestHeaderAuthenticationOptions) ToAuthenticationRequestHeaderConfig() *authenticator.RequestHeaderConfig {
 	if len(s.UsernameHeaders) == 0 {
 		return nil
@@ -323,20 +338,43 @@ func (s *RequestHeaderAuthenticationOptions) ToAuthenticationRequestHeaderConfig
 	}
 }
 
+type ClientCertAuthenticationOptions struct {
+	// ClientCA is the certificate bundle for all the signers that you'll recognize for incoming client certificates
+	ClientCA string
+}
+
+func (s *ClientCertAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&s.ClientCA, "client-ca-file", s.ClientCA, ""+
+		"If set, any request presenting a client certificate signed by one of "+
+		"the authorities in the client-ca-file is authenticated with an identity "+
+		"corresponding to the CommonName of the client certificate.")
+}
+
 // DelegatingAuthenticationOptions provides an easy way for composing API servers to delegate their authentication to
-// the root kube API server
+// the root kube API server.  The API federator will act as
+// a front proxy and direction connections will be able to delegate to the core kube API server
 type DelegatingAuthenticationOptions struct {
 	// RemoteKubeConfigFile is the file to use to connect to a "normal" kube API server which hosts the
-	// TokenAcessReview.authentication.k8s.io endpoint for checking tokens.
+	// TokenAccessReview.authentication.k8s.io endpoint for checking tokens.
 	RemoteKubeConfigFile string
 
 	// CacheTTL is the length of time that a token authentication answer will be cached.
 	CacheTTL time.Duration
+
+	ClientCert    ClientCertAuthenticationOptions
+	RequestHeader RequestHeaderAuthenticationOptions
 }
 
 func NewDelegatingAuthenticationOptions() *DelegatingAuthenticationOptions {
 	return &DelegatingAuthenticationOptions{
-		CacheTTL: 5 * time.Minute,
+		// very low for responsiveness, but high enough to handle storms
+		CacheTTL:   10 * time.Second,
+		ClientCert: ClientCertAuthenticationOptions{},
+		RequestHeader: RequestHeaderAuthenticationOptions{
+			UsernameHeaders:     []string{"x-remote-user"},
+			GroupHeaders:        []string{"x-remote-group"},
+			ExtraHeaderPrefixes: []string{"x-remote-extra-"},
+		},
 	}
 }
 
@@ -348,10 +386,16 @@ func (s *DelegatingAuthenticationOptions) Validate() []error {
 func (s *DelegatingAuthenticationOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&s.RemoteKubeConfigFile, "authentication-kubeconfig", s.RemoteKubeConfigFile, ""+
 		"kubeconfig file pointing at the 'core' kubernetes server with enough rights to create "+
-		" tokenaccessreviews.authencation.k8s.io.")
+		"tokenaccessreviews.authentication.k8s.io.")
+
+	fs.DurationVar(&s.CacheTTL, "authentication-token-webhook-cache-ttl", s.CacheTTL,
+		"The duration to cache responses from the webhook token authenticator.")
+
+	s.ClientCert.AddFlags(fs)
+	s.RequestHeader.AddFlags(fs)
 }
 
-func (s *DelegatingAuthenticationOptions) ToAuthenticationConfig(clientCAFile string) (authenticator.DelegatingAuthenticatorConfig, error) {
+func (s *DelegatingAuthenticationOptions) ToAuthenticationConfig() (authenticator.DelegatingAuthenticatorConfig, error) {
 	tokenClient, err := s.newTokenAccessReview()
 	if err != nil {
 		return authenticator.DelegatingAuthenticatorConfig{}, err
@@ -361,24 +405,33 @@ func (s *DelegatingAuthenticationOptions) ToAuthenticationConfig(clientCAFile st
 		Anonymous:               true,
 		TokenAccessReviewClient: tokenClient,
 		CacheTTL:                s.CacheTTL,
-		ClientCAFile:            clientCAFile,
+		ClientCAFile:            s.ClientCert.ClientCA,
+		RequestHeaderConfig:     s.RequestHeader.ToAuthenticationRequestHeaderConfig(),
 	}
 	return ret, nil
 }
 
 func (s *DelegatingAuthenticationOptions) newTokenAccessReview() (authenticationclient.TokenReviewInterface, error) {
-	if len(s.RemoteKubeConfigFile) == 0 {
-		return nil, nil
+	var clientConfig *restclient.Config
+	var err error
+	if len(s.RemoteKubeConfigFile) > 0 {
+		loadingRules := &clientcmd.ClientConfigLoadingRules{ExplicitPath: s.RemoteKubeConfigFile}
+		loader := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &clientcmd.ConfigOverrides{})
+
+		clientConfig, err = loader.ClientConfig()
+
+	} else {
+		// without the remote kubeconfig file, try to use the in-cluster config.  Most addon API servers will
+		// use this path
+		clientConfig, err = restclient.InClusterConfig()
 	}
-
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	loadingRules.ExplicitPath = s.RemoteKubeConfigFile
-	loader := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &clientcmd.ConfigOverrides{})
-
-	clientConfig, err := loader.ClientConfig()
 	if err != nil {
 		return nil, err
 	}
+
+	// set high qps/burst limits since this will effectively limit API server responsiveness
+	clientConfig.QPS = 200
+	clientConfig.Burst = 400
 
 	client, err := authenticationclient.NewForConfig(clientConfig)
 	if err != nil {

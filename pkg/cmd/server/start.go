@@ -4,17 +4,17 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/pborman/uuid"
 	"github.com/spf13/cobra"
 
-	"k8s.io/kubernetes/pkg/apiserver/authenticator"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
+	"k8s.io/kubernetes/pkg/client/restclient"
 	"k8s.io/kubernetes/pkg/genericapiserver"
+	"k8s.io/kubernetes/pkg/genericapiserver/filters"
 	genericoptions "k8s.io/kubernetes/pkg/genericapiserver/options"
 	kcmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
+	"k8s.io/kubernetes/pkg/util/sets"
 	utilwait "k8s.io/kubernetes/pkg/util/wait"
-	unionauth "k8s.io/kubernetes/plugin/pkg/auth/authenticator/request/union"
 
 	"github.com/openshift/kube-projects/pkg/apiserver"
 )
@@ -25,7 +25,6 @@ type ProjectServerOptions struct {
 	SecureServing  *genericoptions.SecureServingOptions
 	Authentication *genericoptions.DelegatingAuthenticationOptions
 	Authorization  *genericoptions.DelegatingAuthorizationOptions
-	AuthProxy      *genericoptions.RequestHeaderAuthenticationOptions
 
 	AuthUser string
 
@@ -41,8 +40,8 @@ func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
 		SecureServing:  genericoptions.NewSecureServingOptions(),
 		Authentication: genericoptions.NewDelegatingAuthenticationOptions(),
 		Authorization:  genericoptions.NewDelegatingAuthorizationOptions(),
-		AuthProxy:      &genericoptions.RequestHeaderAuthenticationOptions{},
 	}
+	o.SecureServing.ServingOptions.BindPort = 443
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -61,7 +60,6 @@ func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
 	o.SecureServing.AddFlags(flags)
 	o.Authentication.AddFlags(flags)
 	o.Authorization.AddFlags(flags)
-	o.AuthProxy.AddFlags(flags)
 	flags.StringVar(&o.AuthUser, "auth-user", o.AuthUser, "username of the user used for delegating authentication and authorization.  Primes /bootstrap/rbac endpoint.")
 	flags.StringVar(&o.ServerUser, "server-user", o.ServerUser, "username of the user used for accessing resources for this API server.  Primes /bootstrap/rbac endpoint.")
 	flags.StringVar(&o.KubeConfig, "kubeconfig", o.KubeConfig, "kubeconfig file for access resources for this API server.")
@@ -80,61 +78,45 @@ func (o *ProjectServerOptions) Complete() error {
 }
 
 func (o ProjectServerOptions) RunProjectServer() error {
-	var err error
-	genericAPIServerConfig := genericapiserver.NewConfig().ApplySecureServingOptions(o.SecureServing)
-	// TODO remove this, it should be applied some other way
-	genericAPIServerConfig.PublicAddress, _ = o.SecureServing.ServingOptions.DefaultExternalAddress()
-
-	if err := genericAPIServerConfig.MaybeGenerateServingCerts(); err != nil {
-		return err
+	if err := o.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost"); err != nil {
+		return fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
 
-	privilegedLoopbackToken := uuid.NewRandom().String()
-	if genericAPIServerConfig.LoopbackClientConfig, err = genericoptions.NewSelfClientConfig(o.SecureServing, nil, privilegedLoopbackToken); err != nil {
+	genericAPIServerConfig := genericapiserver.NewConfig()
+	if _, err := genericAPIServerConfig.ApplySecureServingOptions(o.SecureServing); err != nil {
 		return err
 	}
-
-	authenticatorConfig, err := o.Authentication.ToAuthenticationConfig(o.SecureServing.ClientCA)
-	if err != nil {
+	if _, err := genericAPIServerConfig.ApplyDelegatingAuthenticationOptions(o.Authentication); err != nil {
 		return err
 	}
-	if genericAPIServerConfig.Authenticator, _, err = authenticatorConfig.New(); err != nil {
+	if _, err := genericAPIServerConfig.ApplyDelegatingAuthorizationOptions(o.Authorization); err != nil {
 		return err
 	}
-	// TODO make this a lot easier
-	proxyConfig := o.AuthProxy.ToAuthenticationRequestHeaderConfig()
-	proxyAuthenticator, _, err := authenticator.New(authenticator.AuthenticatorConfig{RequestHeaderConfig: proxyConfig})
-	if err != nil {
-		return err
-	}
-	genericAPIServerConfig.Authenticator = unionauth.New(proxyAuthenticator, genericAPIServerConfig.Authenticator)
-
-	authorizerConfig, err := o.Authorization.ToAuthorizationConfig()
-	if err != nil {
-		return err
-	}
-	if genericAPIServerConfig.Authorizer, err = authorizerConfig.New(); err != nil {
-		return err
-	}
+	genericAPIServerConfig.LongRunningFunc = filters.BasicLongRunningRequestCheck(
+		sets.NewString("watch", "proxy"),
+		sets.NewString(),
+	)
 
 	// read the kubeconfig file to use for proxying requests
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	loadingRules.ExplicitPath = o.KubeConfig
-	loader := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &clientcmd.ConfigOverrides{})
-	kubeClientConfig, err := loader.ClientConfig()
+	kubeClientConfig, err := restclient.InClusterConfig()
 	if err != nil {
 		return err
 	}
-	clientset, err := internalclientset.NewForConfig(kubeClientConfig)
+	internalclientset, err := internalclientset.NewForConfig(kubeClientConfig)
+	if err != nil {
+		return err
+	}
+	clientset, err := clientset.NewForConfig(kubeClientConfig)
 	if err != nil {
 		return err
 	}
 
 	config := apiserver.Config{
-		GenericConfig:        genericAPIServerConfig,
-		PrivilegedKubeClient: clientset,
-		AuthUser:             o.AuthUser,
-		ServerUser:           o.ServerUser,
+		GenericConfig:                genericAPIServerConfig,
+		PrivilegedKubeClient:         internalclientset,
+		PrivilegedExternalKubeClient: clientset,
+		AuthUser:                     o.AuthUser,
+		ServerUser:                   o.ServerUser,
 	}
 
 	server, err := config.Complete().New()

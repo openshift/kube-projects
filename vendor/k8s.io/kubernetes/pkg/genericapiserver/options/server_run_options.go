@@ -23,17 +23,12 @@ import (
 
 	"k8s.io/kubernetes/pkg/admission"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/apimachinery/registered"
+	"k8s.io/kubernetes/pkg/runtime/schema"
 	"k8s.io/kubernetes/pkg/util/config"
 	utilnet "k8s.io/kubernetes/pkg/util/net"
 
 	"github.com/spf13/pflag"
-)
-
-const (
-	// TODO: This can be tightened up. It still matches objects named watch or proxy.
-	DefaultLongRunningRequestRE = "(/|^)((watch|proxy)(/|$)|(logs?|portforward|exec|attach)/?$)"
 )
 
 var DefaultServiceNodePortRange = utilnet.PortRange{Base: 30000, Size: 2768}
@@ -44,31 +39,30 @@ type ServerRunOptions struct {
 	AdmissionControlConfigFile string
 	AdvertiseAddress           net.IP
 
-	CloudConfigFile           string
-	CloudProvider             string
-	CorsAllowedOriginList     []string
-	DefaultStorageMediaType   string
-	DeleteCollectionWorkers   int
-	AuditLogPath              string
-	AuditLogMaxAge            int
-	AuditLogMaxBackups        int
-	AuditLogMaxSize           int
-	EnableGarbageCollection   bool
-	EnableProfiling           bool
-	EnableSwaggerUI           bool
-	EnableWatchCache          bool
-	EtcdServersOverrides      []string
-	ExternalHost              string
-	KubernetesServiceNodePort int
-	LongRunningRequestRE      string
-	MasterCount               int
-	MasterServiceNamespace    string
-	MaxRequestsInFlight       int
-	MinRequestTimeout         int
-	RuntimeConfig             config.ConfigurationMap
-	ServiceClusterIPRange     net.IPNet // TODO: make this a list
-	ServiceNodePortRange      utilnet.PortRange
-	StorageVersions           string
+	CloudConfigFile             string
+	CloudProvider               string
+	CorsAllowedOriginList       []string
+	DefaultStorageMediaType     string
+	DeleteCollectionWorkers     int
+	AuditLogPath                string
+	AuditLogMaxAge              int
+	AuditLogMaxBackups          int
+	AuditLogMaxSize             int
+	EnableGarbageCollection     bool
+	EnableProfiling             bool
+	EnableContentionProfiling   bool
+	EnableSwaggerUI             bool
+	EnableWatchCache            bool
+	ExternalHost                string
+	KubernetesServiceNodePort   int
+	MasterCount                 int
+	MaxRequestsInFlight         int
+	MaxMutatingRequestsInFlight int
+	MinRequestTimeout           int
+	RuntimeConfig               config.ConfigurationMap
+	ServiceClusterIPRange       net.IPNet // TODO: make this a list
+	ServiceNodePortRange        utilnet.PortRange
+	StorageVersions             string
 	// The default values for StorageVersions. StorageVersions overrides
 	// these; you can change this if you want to change the defaults (e.g.,
 	// for testing). This is not actually exposed as a flag.
@@ -79,21 +73,21 @@ type ServerRunOptions struct {
 
 func NewServerRunOptions() *ServerRunOptions {
 	return &ServerRunOptions{
-		AdmissionControl:        "AlwaysAdmit",
-		DefaultStorageMediaType: "application/json",
-		DefaultStorageVersions:  registered.AllPreferredGroupVersions(),
-		DeleteCollectionWorkers: 1,
-		EnableGarbageCollection: true,
-		EnableProfiling:         true,
-		EnableWatchCache:        true,
-		LongRunningRequestRE:    DefaultLongRunningRequestRE,
-		MasterCount:             1,
-		MasterServiceNamespace:  api.NamespaceDefault,
-		MaxRequestsInFlight:     400,
-		MinRequestTimeout:       1800,
-		RuntimeConfig:           make(config.ConfigurationMap),
-		ServiceNodePortRange:    DefaultServiceNodePortRange,
-		StorageVersions:         registered.AllPreferredGroupVersions(),
+		AdmissionControl:            "AlwaysAdmit",
+		DefaultStorageMediaType:     "application/json",
+		DefaultStorageVersions:      registered.AllPreferredGroupVersions(),
+		DeleteCollectionWorkers:     1,
+		EnableGarbageCollection:     true,
+		EnableProfiling:             true,
+		EnableContentionProfiling:   false,
+		EnableWatchCache:            true,
+		MasterCount:                 1,
+		MaxRequestsInFlight:         400,
+		MaxMutatingRequestsInFlight: 200,
+		MinRequestTimeout:           1800,
+		RuntimeConfig:               make(config.ConfigurationMap),
+		ServiceNodePortRange:        DefaultServiceNodePortRange,
+		StorageVersions:             registered.AllPreferredGroupVersions(),
 	}
 }
 
@@ -117,13 +111,14 @@ func (s *ServerRunOptions) DefaultExternalAddress(secure *SecureServingOptions, 
 			s.AdvertiseAddress = hostIP
 		}
 	}
+
 	return nil
 }
 
 // StorageGroupsToEncodingVersion returns a map from group name to group version,
 // computed from s.StorageVersions flag.
-func (s *ServerRunOptions) StorageGroupsToEncodingVersion() (map[string]unversioned.GroupVersion, error) {
-	storageVersionMap := map[string]unversioned.GroupVersion{}
+func (s *ServerRunOptions) StorageGroupsToEncodingVersion() (map[string]schema.GroupVersion, error) {
+	storageVersionMap := map[string]schema.GroupVersion{}
 
 	// First, get the defaults.
 	if err := mergeGroupVersionIntoMap(s.DefaultStorageVersions, storageVersionMap); err != nil {
@@ -138,7 +133,7 @@ func (s *ServerRunOptions) StorageGroupsToEncodingVersion() (map[string]unversio
 }
 
 // dest must be a map of group to groupVersion.
-func mergeGroupVersionIntoMap(gvList string, dest map[string]unversioned.GroupVersion) error {
+func mergeGroupVersionIntoMap(gvList string, dest map[string]schema.GroupVersion) error {
 	for _, gvString := range strings.Split(gvList, ",") {
 		if gvString == "" {
 			continue
@@ -147,7 +142,7 @@ func mergeGroupVersionIntoMap(gvList string, dest map[string]unversioned.GroupVe
 		// "group=group/version". The latter is used when types
 		// move between groups.
 		if !strings.Contains(gvString, "=") {
-			gv, err := unversioned.ParseGroupVersion(gvString)
+			gv, err := schema.ParseGroupVersion(gvString)
 			if err != nil {
 				return err
 			}
@@ -155,7 +150,7 @@ func mergeGroupVersionIntoMap(gvList string, dest map[string]unversioned.GroupVe
 
 		} else {
 			parts := strings.SplitN(gvString, "=", 2)
-			gv, err := unversioned.ParseGroupVersion(parts[1])
+			gv, err := schema.ParseGroupVersion(parts[1])
 			if err != nil {
 				return err
 			}
@@ -216,6 +211,8 @@ func (s *ServerRunOptions) AddUniversalFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&s.EnableProfiling, "profiling", s.EnableProfiling,
 		"Enable profiling via web interface host:port/debug/pprof/")
+	fs.BoolVar(&s.EnableContentionProfiling, "contention-profiling", s.EnableContentionProfiling,
+		"Enable contention profiling. Requires --profiling to be set to work.")
 
 	fs.BoolVar(&s.EnableSwaggerUI, "enable-swagger-ui", s.EnableSwaggerUI,
 		"Enables swagger ui on the apiserver at /swagger-ui")
@@ -237,18 +234,25 @@ func (s *ServerRunOptions) AddUniversalFlags(fs *pflag.FlagSet) {
 		"of type NodePort, using this as the value of the port. If zero, the Kubernetes master "+
 		"service will be of type ClusterIP.")
 
-	fs.StringVar(&s.LongRunningRequestRE, "long-running-request-regexp", s.LongRunningRequestRE, ""+
+	// TODO: remove post-1.6
+	fs.String("long-running-request-regexp", "", ""+
 		"A regular expression matching long running requests which should "+
 		"be excluded from maximum inflight request handling.")
+	fs.MarkDeprecated("long-running-request-regexp", "regular expression matching of long-running requests is no longer supported")
 
 	fs.IntVar(&s.MasterCount, "apiserver-count", s.MasterCount,
 		"The number of apiservers running in the cluster.")
 
-	fs.StringVar(&s.MasterServiceNamespace, "master-service-namespace", s.MasterServiceNamespace, ""+
+	deprecatedMasterServiceNamespace := api.NamespaceDefault
+	fs.StringVar(&deprecatedMasterServiceNamespace, "master-service-namespace", deprecatedMasterServiceNamespace, ""+
 		"DEPRECATED: the namespace from which the kubernetes master services should be injected into pods.")
 
 	fs.IntVar(&s.MaxRequestsInFlight, "max-requests-inflight", s.MaxRequestsInFlight, ""+
-		"The maximum number of requests in flight at a given time. When the server exceeds this, "+
+		"The maximum number of non-mutating requests in flight at a given time. When the server exceeds this, "+
+		"it rejects requests. Zero for no limit.")
+
+	fs.IntVar(&s.MaxMutatingRequestsInFlight, "max-mutating-requests-inflight", s.MaxMutatingRequestsInFlight, ""+
+		"The maximum number of mutating requests in flight at a given time. When the server exceeds this, "+
 		"it rejects requests. Zero for no limit.")
 
 	fs.IntVar(&s.MinRequestTimeout, "min-request-timeout", s.MinRequestTimeout, ""+

@@ -204,6 +204,7 @@ func newMockRuleResolver(r *StaticRoles) AuthorizationRuleResolver {
 	return NewDefaultRuleResolver(r, r, r, r)
 }
 
+// StaticRoles is a rule resolver that resolves from lists of role objects.
 type StaticRoles struct {
 	roles               []*rbac.Role
 	roleBindings        []*rbac.RoleBinding

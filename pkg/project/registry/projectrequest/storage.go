@@ -9,8 +9,8 @@ import (
 	kapi "k8s.io/kubernetes/pkg/api"
 	kapierror "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/rest"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	authorizationapi "k8s.io/kubernetes/pkg/apis/authorization"
+	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/apis/rbac"
 	"k8s.io/kubernetes/pkg/auth/authorizer"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
@@ -44,7 +44,7 @@ func (r *REST) New() runtime.Object {
 }
 
 func (r *REST) NewList() runtime.Object {
-	return &unversioned.Status{}
+	return &metav1.Status{}
 }
 
 var _ = rest.Creater(&REST{})
@@ -61,7 +61,7 @@ func (r *REST) Create(ctx kapi.Context, obj runtime.Object) (runtime.Object, err
 
 	projectRequest := obj.(*projectapi.ProjectRequest)
 
-	if _, err := r.privilegedKubeClient.Core().Namespaces().Get(projectRequest.Name); err == nil {
+	if _, err := r.privilegedKubeClient.Core().Namespaces().Get(projectRequest.Name, metav1.GetOptions{}); err == nil {
 		return nil, kapierror.NewAlreadyExists(projectapi.Resource("project"), projectRequest.Name)
 	}
 
@@ -159,16 +159,16 @@ func (r *REST) List(ctx kapi.Context, options *kapi.ListOptions) (runtime.Object
 	}
 	allowed, _, _ := r.authorizer.Authorize(accessCheck)
 	if allowed {
-		return &unversioned.Status{Status: unversioned.StatusSuccess}, nil
+		return &metav1.Status{Status: metav1.StatusSuccess}, nil
 	}
 
 	forbiddenError := kapierror.NewForbidden(projectapi.Resource("projectrequest"), "", errors.New("you may not request a new project via this API."))
 	if len(r.message) > 0 {
 		forbiddenError.ErrStatus.Message = r.message
-		forbiddenError.ErrStatus.Details = &unversioned.StatusDetails{
+		forbiddenError.ErrStatus.Details = &metav1.StatusDetails{
 			Group: projectapi.GroupName,
 			Kind:  "ProjectRequest",
-			Causes: []unversioned.StatusCause{
+			Causes: []metav1.StatusCause{
 				{Message: r.message},
 			},
 		}

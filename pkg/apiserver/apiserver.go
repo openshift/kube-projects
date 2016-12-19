@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
@@ -11,11 +10,14 @@ import (
 	"k8s.io/kubernetes/pkg/api/rest"
 	apiserverfilters "k8s.io/kubernetes/pkg/apiserver/filters"
 	authhandlers "k8s.io/kubernetes/pkg/auth/handlers"
+	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
+	kubeinformers "k8s.io/kubernetes/pkg/client/informers/informers_generated"
 	"k8s.io/kubernetes/pkg/controller/informers"
 	"k8s.io/kubernetes/pkg/genericapiserver"
 	genericfilters "k8s.io/kubernetes/pkg/genericapiserver/filters"
 	"k8s.io/kubernetes/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/version"
 	rbacauthorizer "k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac"
 
 	"github.com/openshift/kube-projects/pkg/apiserver/bootstraproutes"
@@ -29,7 +31,8 @@ import (
 type Config struct {
 	GenericConfig *genericapiserver.Config
 
-	PrivilegedKubeClient internalclientset.Interface
+	PrivilegedKubeClient         internalclientset.Interface
+	PrivilegedExternalKubeClient clientset.Interface
 
 	AuthUser   string
 	ServerUser string
@@ -46,6 +49,8 @@ type completedConfig struct {
 
 // Complete fills in any fields not set that are required to have valid data. It's mutating the receiver.
 func (c *Config) Complete() completedConfig {
+	c.GenericConfig.Version = &version.Info{Major: "1"}
+
 	c.GenericConfig.Complete()
 
 	return completedConfig{c}
@@ -60,6 +65,9 @@ func (c *Config) SkipComplete() completedConfig {
 func (c completedConfig) New() (*ProjectServer, error) {
 	if c.PrivilegedKubeClient == nil {
 		return nil, fmt.Errorf("missing PrivilegedKubeClient")
+	}
+	if c.PrivilegedExternalKubeClient == nil {
+		return nil, fmt.Errorf("missing PrivilegedExternalKubeClient")
 	}
 
 	unprotectedMux := http.NewServeMux()
@@ -76,19 +84,15 @@ func (c completedConfig) New() (*ProjectServer, error) {
 		GenericAPIServer: s,
 	}
 
-	// this isn't exactly a CA, but it will verify in the simple case until I pass something in.
-	certBytes, err := ioutil.ReadFile(c.Config.GenericConfig.SecureServingInfo.ServerCert.CertFile)
-	if err != nil {
-		return nil, err
-	}
-
 	bootstraproutes.RBAC{AuthUser: c.AuthUser, ServerUser: c.ServerUser}.Install(unprotectedMux)
 	bootstraproutes.APIFederation{
-		InternalHost: c.Config.GenericConfig.ExternalAddress,
-		CABundle:     certBytes,
+		Namespace:   "projects.openshift.io",
+		ServiceName: "api",
 	}.Install(unprotectedMux)
 
-	informerFactory := informers.NewSharedInformerFactory(c.PrivilegedKubeClient, 10*time.Minute)
+	kubeInformers := kubeinformers.NewSharedInformerFactory(c.PrivilegedKubeClient, c.PrivilegedExternalKubeClient, 10*time.Minute)
+
+	informerFactory := informers.NewSharedInformerFactory(c.PrivilegedExternalKubeClient, c.PrivilegedKubeClient, 10*time.Minute)
 	subjectAccessEvaluator := rbacauthorizer.NewSubjectAccessEvaluator(
 		informerFactory.Roles().Lister(),
 		informerFactory.RoleBindings().Lister(),
@@ -98,7 +102,7 @@ func (c completedConfig) New() (*ProjectServer, error) {
 	)
 	authCache := authcache.NewAuthorizationCache(
 		authcache.NewReviewer(subjectAccessEvaluator),
-		informerFactory.Namespaces(),
+		kubeInformers.Core().InternalVersion().Namespaces(),
 		informerFactory.ClusterRoles(), informerFactory.ClusterRoleBindings(), informerFactory.Roles(), informerFactory.RoleBindings(),
 	)
 
@@ -117,6 +121,7 @@ func (c completedConfig) New() (*ProjectServer, error) {
 
 	m.GenericAPIServer.AddPostStartHook("start-informers", func(context genericapiserver.PostStartHookContext) error {
 		informerFactory.Start(wait.NeverStop)
+		kubeInformers.Start(wait.NeverStop)
 		return nil
 	})
 	m.GenericAPIServer.AddPostStartHook("start-authorization-cache", func(context genericapiserver.PostStartHookContext) error {
@@ -132,24 +137,22 @@ type handlerChainConfig struct {
 }
 
 func (h *handlerChainConfig) handlerChain(apiHandler http.Handler, c *genericapiserver.Config) (secure, insecure http.Handler) {
-	attributeGetter := apiserverfilters.NewRequestAttributeGetter(c.RequestContextMapper)
-
-	handler := apiserverfilters.WithAuthorization(apiHandler, attributeGetter, c.Authorizer)
+	handler := apiserverfilters.WithAuthorization(apiHandler, c.RequestContextMapper, c.Authorizer)
 
 	// this mux is NOT protected by authorization, but DOES have authentication information
 	// this is so that everyone can hit these endpoints, but we have the user information for proxy cases
 	handler = WithUnprotectedMux(handler, h.unprotectedMux)
 
 	handler = apiserverfilters.WithImpersonation(handler, c.RequestContextMapper, c.Authorizer)
-	handler = apiserverfilters.WithAudit(handler, attributeGetter, os.Stdout)
+	handler = apiserverfilters.WithAudit(handler, c.RequestContextMapper, os.Stdout)
 	handler = authhandlers.WithAuthentication(handler, c.RequestContextMapper, c.Authenticator, authhandlers.Unauthorized(c.SupportsBasicAuth))
 
 	handler = genericfilters.WithCORS(handler, c.CorsAllowedOriginList, nil, nil, nil, "true")
 	handler = genericfilters.WithPanicRecovery(handler, c.RequestContextMapper)
+	handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.RequestContextMapper, c.LongRunningFunc)
+	handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.MaxMutatingRequestsInFlight, c.RequestContextMapper, c.LongRunningFunc)
 	handler = apiserverfilters.WithRequestInfo(handler, genericapiserver.NewRequestInfoResolver(c), c.RequestContextMapper)
 	handler = kapi.WithRequestContext(handler, c.RequestContextMapper)
-	handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.LongRunningFunc)
-	handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.LongRunningFunc)
 
 	return handler, nil
 }
