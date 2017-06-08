@@ -1,9 +1,9 @@
 package auth
 
 import (
-	kapi "k8s.io/kubernetes/pkg/api"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
+	kapi "k8s.io/client-go/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/rbac"
-	"k8s.io/kubernetes/pkg/auth/authorizer"
 	rbacauthorizer "k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac"
 )
 

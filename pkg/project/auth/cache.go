@@ -6,20 +6,21 @@ import (
 	"sync"
 	"time"
 
+	kapierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
+	utilwait "k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apiserver/pkg/authentication/serviceaccount"
+	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/client-go/tools/cache"
 	kapi "k8s.io/kubernetes/pkg/api"
-	kapierrors "k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/apis/rbac"
-	"k8s.io/kubernetes/pkg/auth/user"
-	"k8s.io/kubernetes/pkg/client/cache"
-	kubecoreinformers "k8s.io/kubernetes/pkg/client/informers/informers_generated/core/internalversion"
+	kubecoreinformers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion/core/internalversion"
+	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion/rbac/internalversion"
 	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
-	"k8s.io/kubernetes/pkg/controller/informers"
-	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/serviceaccount"
-	"k8s.io/kubernetes/pkg/types"
-	utilruntime "k8s.io/kubernetes/pkg/util/runtime"
-	"k8s.io/kubernetes/pkg/util/sets"
-	utilwait "k8s.io/kubernetes/pkg/util/wait"
+	rbaclisters "k8s.io/kubernetes/pkg/client/listers/rbac/internalversion"
 )
 
 // Lister enforces ability to enumerate a resource based on role
@@ -123,10 +124,10 @@ type AuthorizationCache struct {
 	namespaceLister           corelisters.NamespaceLister
 	lastSyncResourceVersioner LastSyncResourceVersioner
 
-	clusterRoleLister               cache.ClusterRoleLister
-	clusterRoleBindingLister        cache.ClusterRoleBindingLister
-	roleLister                      cache.RoleLister
-	roleBindingLister               cache.RoleBindingLister
+	clusterRoleLister               rbaclisters.ClusterRoleLister
+	clusterRoleBindingLister        rbaclisters.ClusterRoleBindingLister
+	roleLister                      rbaclisters.RoleLister
+	roleBindingLister               rbaclisters.RoleBindingLister
 	policyLastSyncResourceVersioner LastSyncResourceVersioner
 
 	reviewRecordStore       cache.Store

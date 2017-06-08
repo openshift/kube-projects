@@ -4,24 +4,26 @@ import (
 	"testing"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/client-go/tools/cache"
 	kapi "k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/auth/user"
-	"k8s.io/kubernetes/pkg/client/cache"
-	"k8s.io/kubernetes/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/util/wait"
-	"k8s.io/kubernetes/pkg/watch"
+	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 
 	projectapi "github.com/openshift/kube-projects/pkg/project/api"
 )
 
 func newTestWatcher(username string, groups []string, namespaces ...*kapi.Namespace) (*userProjectWatcher, *fakeAuthCache) {
-	nsLister := &cache.IndexerToNamespaceLister{Indexer: cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})}
+	nsIndexer := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	for _, namespace := range namespaces {
-		nsLister.Add(namespace)
+		nsIndexer.Add(namespace)
 	}
 	fakeAuthCache := &fakeAuthCache{}
 
-	return NewUserProjectWatcher(&user.DefaultInfo{Name: username, Groups: groups}, sets.NewString("*"), nsLister, fakeAuthCache, false), fakeAuthCache
+	return NewUserProjectWatcher(&user.DefaultInfo{Name: username, Groups: groups}, sets.NewString("*"), corelisters.NewNamespaceLister(nsIndexer), fakeAuthCache, false), fakeAuthCache
 }
 
 type fakeAuthCache struct {
@@ -174,7 +176,7 @@ func TestAddModifyDeleteEventsByGroup(t *testing.T) {
 func newNamespaces(names ...string) []*kapi.Namespace {
 	ret := []*kapi.Namespace{}
 	for _, name := range names {
-		ret = append(ret, &kapi.Namespace{ObjectMeta: kapi.ObjectMeta{Name: name}})
+		ret = append(ret, &kapi.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}})
 	}
 
 	return ret

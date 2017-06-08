@@ -4,18 +4,27 @@ import (
 	"reflect"
 	"strings"
 
-	"k8s.io/kubernetes/pkg/api/validation"
-	"k8s.io/kubernetes/pkg/util/validation/field"
+	"k8s.io/apimachinery/pkg/api/validation"
+	"k8s.io/apimachinery/pkg/api/validation/path"
+	"k8s.io/apimachinery/pkg/util/validation/field"
+	kubevalidation "k8s.io/kubernetes/pkg/api/validation"
 
 	"github.com/openshift/kube-projects/pkg/project/api"
 	projectapi "github.com/openshift/kube-projects/pkg/project/api"
 )
 
 func ValidateProjectName(name string, prefix bool) []string {
-	if reasons := validation.ValidateNamespaceName(name, false); len(reasons) != 0 {
+	if reasons := path.ValidatePathSegmentName(name, prefix); len(reasons) != 0 {
 		return reasons
 	}
 
+	if len(name) < 2 {
+		return []string{"must be at least 2 characters long"}
+	}
+
+	if reasons := kubevalidation.ValidateNamespaceName(name, false); len(reasons) != 0 {
+		return reasons
+	}
 	return nil
 }
 
@@ -29,6 +38,7 @@ func ValidateProject(project *api.Project) field.ErrorList {
 		result = append(result, field.Invalid(field.NewPath("metadata", "annotations").Key(projectapi.ProjectDisplayName),
 			project.Annotations[projectapi.ProjectDisplayName], "may not contain a new line or tab"))
 	}
+
 	return result
 }
 

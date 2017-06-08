@@ -4,7 +4,7 @@ import (
 	"os"
 	"runtime"
 
-	"k8s.io/kubernetes/pkg/util/logs"
+	"k8s.io/apiserver/pkg/util/logs"
 
 	"github.com/openshift/kube-projects/pkg/cmd/server"
 
