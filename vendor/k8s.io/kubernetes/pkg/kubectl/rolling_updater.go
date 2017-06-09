@@ -17,26 +17,27 @@ limitations under the License.
 package kubectl
 
 import (
-	goerrors "errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/integer"
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/api/v1"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
+	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	coreclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
 	"k8s.io/kubernetes/pkg/client/retry"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 	deploymentutil "k8s.io/kubernetes/pkg/controller/deployment/util"
-	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/util/integer"
-	"k8s.io/kubernetes/pkg/util/intstr"
-	"k8s.io/kubernetes/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/kubectl/util"
 )
 
 const (
@@ -415,7 +416,7 @@ func (r *RollingUpdater) readyPods(oldRc, newRc *api.ReplicationController, minR
 	for i := range controllers {
 		controller := controllers[i]
 		selector := labels.Set(controller.Spec.Selector).AsSelector()
-		options := api.ListOptions{LabelSelector: selector}
+		options := metav1.ListOptions{LabelSelector: selector.String()}
 		pods, err := r.podClient.Pods(controller.Namespace).List(options)
 		if err != nil {
 			return 0, 0, err
@@ -425,7 +426,11 @@ func (r *RollingUpdater) readyPods(oldRc, newRc *api.ReplicationController, minR
 			if err := v1.Convert_api_Pod_To_v1_Pod(&pod, v1Pod, nil); err != nil {
 				return 0, 0, err
 			}
-			if !deploymentutil.IsPodAvailable(v1Pod, minReadySeconds, r.nowFn().Time) {
+			// Do not count deleted pods as ready
+			if v1Pod.DeletionTimestamp != nil {
+				continue
+			}
+			if !podutil.IsPodAvailable(v1Pod, minReadySeconds, r.nowFn()) {
 				continue
 			}
 			switch controller.Name {
@@ -540,7 +545,7 @@ func Rename(c coreclient.ReplicationControllersGetter, rc *api.ReplicationContro
 	rc.ResourceVersion = ""
 	// First delete the oldName RC and orphan its pods.
 	trueVar := true
-	err := c.ReplicationControllers(rc.Namespace).Delete(oldName, &api.DeleteOptions{OrphanDependents: &trueVar})
+	err := c.ReplicationControllers(rc.Namespace).Delete(oldName, &metav1.DeleteOptions{OrphanDependents: &trueVar})
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
@@ -610,18 +615,18 @@ func CreateNewControllerFromCurrentController(rcClient coreclient.ReplicationCon
 	}
 
 	if len(newRc.Spec.Template.Spec.Containers) > 1 && len(cfg.Container) == 0 {
-		return nil, goerrors.New("Must specify container to update when updating a multi-container pod")
+		return nil, fmt.Errorf("must specify container to update when updating a multi-container pod")
 	}
 
 	if len(newRc.Spec.Template.Spec.Containers) == 0 {
-		return nil, goerrors.New(fmt.Sprintf("Pod has no containers! (%v)", newRc))
+		return nil, fmt.Errorf("pod has no containers! (%v)", newRc)
 	}
 	newRc.Spec.Template.Spec.Containers[containerIndex].Image = cfg.Image
 	if len(cfg.PullPolicy) != 0 {
 		newRc.Spec.Template.Spec.Containers[containerIndex].ImagePullPolicy = cfg.PullPolicy
 	}
 
-	newHash, err := api.HashObject(newRc, codec)
+	newHash, err := util.HashObject(newRc, codec)
 	if err != nil {
 		return nil, err
 	}
@@ -704,7 +709,7 @@ func AddDeploymentKeyToReplicationController(oldRc *api.ReplicationController, r
 	// Update all pods managed by the rc to have the new hash label, so they are correctly adopted
 	// TODO: extract the code from the label command and re-use it here.
 	selector := labels.SelectorFromSet(oldRc.Spec.Selector)
-	options := api.ListOptions{LabelSelector: selector}
+	options := metav1.ListOptions{LabelSelector: selector.String()}
 	podList, err := podClient.Pods(namespace).List(options)
 	if err != nil {
 		return nil, err
@@ -745,7 +750,7 @@ func AddDeploymentKeyToReplicationController(oldRc *api.ReplicationController, r
 	// doesn't see the update to its pod template and creates a new pod with the old labels after
 	// we've finished re-adopting existing pods to the rc.
 	selector = labels.SelectorFromSet(selectorCopy)
-	options = api.ListOptions{LabelSelector: selector}
+	options = metav1.ListOptions{LabelSelector: selector.String()}
 	podList, err = podClient.Pods(namespace).List(options)
 	for ix := range podList.Items {
 		pod := &podList.Items[ix]
@@ -826,7 +831,7 @@ func updatePodWithRetries(podClient coreclient.PodsGetter, namespace string, pod
 }
 
 func FindSourceController(r coreclient.ReplicationControllersGetter, namespace, name string) (*api.ReplicationController, error) {
-	list, err := r.ReplicationControllers(namespace).List(api.ListOptions{})
+	list, err := r.ReplicationControllers(namespace).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}

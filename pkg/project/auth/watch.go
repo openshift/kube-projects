@@ -2,19 +2,18 @@ package auth
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/golang/glog"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/apiserver/pkg/storage"
 	kapi "k8s.io/kubernetes/pkg/api"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/auth/user"
-	"k8s.io/kubernetes/pkg/client/cache"
-	"k8s.io/kubernetes/pkg/storage"
-	utilruntime "k8s.io/kubernetes/pkg/util/runtime"
-	"k8s.io/kubernetes/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/watch"
+	listers "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 
 	projectutil "github.com/openshift/kube-projects/pkg/project/util"
 )
@@ -57,7 +56,7 @@ type userProjectWatcher struct {
 	// Injectable for testing. Send the event down the outgoing channel.
 	emit func(watch.Event)
 
-	nsLister  *cache.IndexerToNamespaceLister
+	nsLister  listers.NamespaceLister
 	authCache WatchableCache
 
 	initialProjects []kapi.Namespace
@@ -71,7 +70,7 @@ var (
 	watchChannelHWM storage.HighWaterMark
 )
 
-func NewUserProjectWatcher(user user.Info, visibleNamespaces sets.String, nsLister *cache.IndexerToNamespaceLister, authCache WatchableCache, includeAllExistingProjects bool) *userProjectWatcher {
+func NewUserProjectWatcher(user user.Info, visibleNamespaces sets.String, nsLister listers.NamespaceLister, authCache WatchableCache, includeAllExistingProjects bool) *userProjectWatcher {
 	namespaces, _ := authCache.List(user)
 	knownProjects := map[string]string{}
 	for _, namespace := range namespaces.Items {
@@ -124,7 +123,7 @@ func (w *userProjectWatcher) GroupMembershipChanged(namespaceName string, users,
 		select {
 		case w.cacheIncoming <- watch.Event{
 			Type:   watch.Deleted,
-			Object: projectutil.ConvertNamespace(&kapi.Namespace{ObjectMeta: kapi.ObjectMeta{Name: namespaceName}}),
+			Object: projectutil.ConvertNamespace(&kapi.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}),
 		}:
 		default:
 			// remove the watcher so that we wont' be notified again and block
@@ -133,12 +132,7 @@ func (w *userProjectWatcher) GroupMembershipChanged(namespaceName string, users,
 		}
 
 	case hasAccess:
-		obj, exists, err := w.nsLister.GetByKey(namespaceName)
-		if !exists {
-			utilruntime.HandleError(fmt.Errorf("%q not found", namespaceName))
-			return
-		}
-		namespace := obj.(*kapi.Namespace)
+		namespace, err := w.nsLister.Get(namespaceName)
 		if err != nil {
 			utilruntime.HandleError(err)
 			return

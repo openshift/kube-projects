@@ -6,30 +6,22 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
+	utilwait "k8s.io/apimachinery/pkg/util/wait"
+	genericapiserver "k8s.io/apiserver/pkg/server"
+	genericoptions "k8s.io/apiserver/pkg/server/options"
+	"k8s.io/client-go/rest"
+	kapi "k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	"k8s.io/kubernetes/pkg/client/restclient"
-	"k8s.io/kubernetes/pkg/genericapiserver"
-	"k8s.io/kubernetes/pkg/genericapiserver/filters"
-	genericoptions "k8s.io/kubernetes/pkg/genericapiserver/options"
 	kcmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
-	"k8s.io/kubernetes/pkg/util/sets"
-	utilwait "k8s.io/kubernetes/pkg/util/wait"
 
 	"github.com/openshift/kube-projects/pkg/apiserver"
+	projectapiv1 "github.com/openshift/kube-projects/pkg/project/api/v1"
 )
 
 const defaultConfigDir = "openshift.local.config/project-server"
 
 type ProjectServerOptions struct {
-	SecureServing  *genericoptions.SecureServingOptions
-	Authentication *genericoptions.DelegatingAuthenticationOptions
-	Authorization  *genericoptions.DelegatingAuthorizationOptions
-
-	AuthUser string
-
-	ServerUser string
-	KubeConfig string
+	RecommendedOptions *genericoptions.RecommendedOptions
 }
 
 const startLong = `Start an API server hosting the project.openshift.io API.`
@@ -37,11 +29,8 @@ const startLong = `Start an API server hosting the project.openshift.io API.`
 // NewCommandStartMaster provides a CLI handler for 'start master' command
 func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
 	o := &ProjectServerOptions{
-		SecureServing:  genericoptions.NewSecureServingOptions(),
-		Authentication: genericoptions.NewDelegatingAuthenticationOptions(),
-		Authorization:  genericoptions.NewDelegatingAuthorizationOptions(),
+		RecommendedOptions: genericoptions.NewRecommendedOptions("kube-projects.openshift.io", kapi.Scheme, kapi.Codecs.LegacyCodec(projectapiv1.SchemeGroupVersion)),
 	}
-	o.SecureServing.ServingOptions.BindPort = 443
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -56,15 +45,7 @@ func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
 		},
 	}
 
-	flags := cmd.Flags()
-	o.SecureServing.AddFlags(flags)
-	o.Authentication.AddFlags(flags)
-	o.Authorization.AddFlags(flags)
-	flags.StringVar(&o.AuthUser, "auth-user", o.AuthUser, "username of the user used for delegating authentication and authorization.  Primes /bootstrap/rbac endpoint.")
-	flags.StringVar(&o.ServerUser, "server-user", o.ServerUser, "username of the user used for accessing resources for this API server.  Primes /bootstrap/rbac endpoint.")
-	flags.StringVar(&o.KubeConfig, "kubeconfig", o.KubeConfig, "kubeconfig file for access resources for this API server.")
-
-	GLog(cmd.PersistentFlags())
+	o.RecommendedOptions.AddFlags(cmd.Flags())
 
 	return cmd
 }
@@ -78,27 +59,18 @@ func (o *ProjectServerOptions) Complete() error {
 }
 
 func (o ProjectServerOptions) RunProjectServer() error {
-	if err := o.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost"); err != nil {
+	// TODO have a "real" external address
+	if err := o.RecommendedOptions.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, nil); err != nil {
 		return fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
 
-	genericAPIServerConfig := genericapiserver.NewConfig()
-	if _, err := genericAPIServerConfig.ApplySecureServingOptions(o.SecureServing); err != nil {
+	genericAPIServerConfig := genericapiserver.NewConfig(kapi.Codecs)
+	if err := o.RecommendedOptions.ApplyTo(genericAPIServerConfig); err != nil {
 		return err
 	}
-	if _, err := genericAPIServerConfig.ApplyDelegatingAuthenticationOptions(o.Authentication); err != nil {
-		return err
-	}
-	if _, err := genericAPIServerConfig.ApplyDelegatingAuthorizationOptions(o.Authorization); err != nil {
-		return err
-	}
-	genericAPIServerConfig.LongRunningFunc = filters.BasicLongRunningRequestCheck(
-		sets.NewString("watch", "proxy"),
-		sets.NewString(),
-	)
 
 	// read the kubeconfig file to use for proxying requests
-	kubeClientConfig, err := restclient.InClusterConfig()
+	kubeClientConfig, err := rest.InClusterConfig()
 	if err != nil {
 		return err
 	}
@@ -106,17 +78,10 @@ func (o ProjectServerOptions) RunProjectServer() error {
 	if err != nil {
 		return err
 	}
-	clientset, err := clientset.NewForConfig(kubeClientConfig)
-	if err != nil {
-		return err
-	}
 
 	config := apiserver.Config{
-		GenericConfig:                genericAPIServerConfig,
-		PrivilegedKubeClient:         internalclientset,
-		PrivilegedExternalKubeClient: clientset,
-		AuthUser:                     o.AuthUser,
-		ServerUser:                   o.ServerUser,
+		GenericConfig: genericAPIServerConfig,
+		KubeClient:    internalclientset,
 	}
 
 	server, err := config.Complete().New()

@@ -3,20 +3,22 @@ package project
 import (
 	"fmt"
 
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/registry/rest"
+	"k8s.io/apiserver/pkg/storage"
 	kapi "k8s.io/kubernetes/pkg/api"
-	kerrors "k8s.io/kubernetes/pkg/api/errors"
-	"k8s.io/kubernetes/pkg/api/meta"
-	"k8s.io/kubernetes/pkg/api/rest"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/client/cache"
 	coreclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
-	"k8s.io/kubernetes/pkg/fields"
-	"k8s.io/kubernetes/pkg/labels"
+	listers "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	nsregistry "k8s.io/kubernetes/pkg/registry/core/namespace"
-	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/storage"
-	"k8s.io/kubernetes/pkg/util/sets"
-	"k8s.io/kubernetes/pkg/watch"
 
 	projectapi "github.com/openshift/kube-projects/pkg/project/api"
 	projectauth "github.com/openshift/kube-projects/pkg/project/auth"
@@ -34,11 +36,11 @@ type REST struct {
 	updateStrategy rest.RESTUpdateStrategy
 
 	authCache *projectauth.AuthorizationCache
-	nsLister  *cache.IndexerToNamespaceLister
+	nsLister  listers.NamespaceLister
 }
 
 // NewREST returns a RESTStorage object that will work against Project resources
-func NewREST(client coreclient.NamespaceInterface, lister projectauth.Lister, authCache *projectauth.AuthorizationCache, nsLister *cache.IndexerToNamespaceLister) *REST {
+func NewREST(client coreclient.NamespaceInterface, lister projectauth.Lister, authCache *projectauth.AuthorizationCache, nsLister listers.NamespaceLister) *REST {
 	return &REST{
 		client:         client,
 		lister:         lister,
@@ -63,8 +65,8 @@ func (*REST) NewList() runtime.Object {
 var _ = rest.Lister(&REST{})
 
 // List retrieves a list of Projects that match label.
-func (s *REST) List(ctx kapi.Context, options *kapi.ListOptions) (runtime.Object, error) {
-	user, ok := kapi.UserFrom(ctx)
+func (s *REST) List(ctx request.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
+	user, ok := request.UserFrom(ctx)
 	if !ok {
 		return nil, kerrors.NewForbidden(projectapi.Resource("project"), "", fmt.Errorf("unable to list projects without a user on the context"))
 	}
@@ -80,11 +82,11 @@ func (s *REST) List(ctx kapi.Context, options *kapi.ListOptions) (runtime.Object
 	return projectutil.ConvertNamespaceList(list.(*kapi.NamespaceList)), nil
 }
 
-func (s *REST) Watch(ctx kapi.Context, options *kapi.ListOptions) (watch.Interface, error) {
+func (s *REST) Watch(ctx request.Context, options *metav1.ListOptions) (watch.Interface, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("Context is nil")
 	}
-	userInfo, exists := kapi.UserFrom(ctx)
+	userInfo, exists := request.UserFrom(ctx)
 	if !exists {
 		return nil, fmt.Errorf("no user")
 	}
@@ -104,7 +106,7 @@ func (s *REST) Watch(ctx kapi.Context, options *kapi.ListOptions) (watch.Interfa
 var _ = rest.Getter(&REST{})
 
 // Get retrieves a Project by name
-func (s *REST) Get(ctx kapi.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
+func (s *REST) Get(ctx request.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	namespace, err := s.client.Get(name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
@@ -115,12 +117,12 @@ func (s *REST) Get(ctx kapi.Context, name string, options *metav1.GetOptions) (r
 var _ = rest.Creater(&REST{})
 
 // Create registers the given Project.
-func (s *REST) Create(ctx kapi.Context, obj runtime.Object) (runtime.Object, error) {
+func (s *REST) Create(ctx request.Context, obj runtime.Object, _ bool) (runtime.Object, error) {
 	project, ok := obj.(*projectapi.Project)
 	if !ok {
 		return nil, fmt.Errorf("not a project: %#v", obj)
 	}
-	kapi.FillObjectMetaSystemFields(ctx, &project.ObjectMeta)
+	rest.FillObjectMetaSystemFields(ctx, &project.ObjectMeta)
 	s.createStrategy.PrepareForCreate(ctx, obj)
 	if errs := s.createStrategy.Validate(ctx, obj); len(errs) > 0 {
 		return nil, kerrors.NewInvalid(projectapi.Kind("Project"), project.Name, errs)
@@ -134,7 +136,7 @@ func (s *REST) Create(ctx kapi.Context, obj runtime.Object) (runtime.Object, err
 
 var _ = rest.Updater(&REST{})
 
-func (s *REST) Update(ctx kapi.Context, name string, objInfo rest.UpdatedObjectInfo) (runtime.Object, bool, error) {
+func (s *REST) Update(ctx request.Context, name string, objInfo rest.UpdatedObjectInfo) (runtime.Object, bool, error) {
 	oldObj, err := s.Get(ctx, name, nil)
 	if err != nil {
 		return nil, false, err
@@ -166,7 +168,7 @@ func (s *REST) Update(ctx kapi.Context, name string, objInfo rest.UpdatedObjectI
 var _ = rest.Deleter(&REST{})
 
 // Delete deletes a Project specified by its name
-func (s *REST) Delete(ctx kapi.Context, name string) (runtime.Object, error) {
+func (s *REST) Delete(ctx request.Context, name string) (runtime.Object, error) {
 	return &metav1.Status{Status: metav1.StatusSuccess}, s.client.Delete(name, nil)
 }
 
@@ -205,7 +207,7 @@ func filterList(list runtime.Object, m storage.SelectionPredicate, d decoratorFu
 	return list, nil
 }
 
-func ListOptionsToSelectors(options *kapi.ListOptions) (labels.Selector, fields.Selector) {
+func ListOptionsToSelectors(options *metainternalversion.ListOptions) (labels.Selector, fields.Selector) {
 	label := labels.Everything()
 	if options != nil && options.LabelSelector != nil {
 		label = options.LabelSelector

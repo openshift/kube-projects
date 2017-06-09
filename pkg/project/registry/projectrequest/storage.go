@@ -6,18 +6,20 @@ import (
 
 	"github.com/golang/glog"
 
+	kapierror "k8s.io/apimachinery/pkg/api/errors"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/registry/rest"
 	kapi "k8s.io/kubernetes/pkg/api"
-	kapierror "k8s.io/kubernetes/pkg/api/errors"
-	"k8s.io/kubernetes/pkg/api/rest"
 	authorizationapi "k8s.io/kubernetes/pkg/apis/authorization"
-	metav1 "k8s.io/kubernetes/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/apis/rbac"
-	"k8s.io/kubernetes/pkg/auth/authorizer"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/client/retry"
-	"k8s.io/kubernetes/pkg/runtime"
-	utilruntime "k8s.io/kubernetes/pkg/util/runtime"
-	"k8s.io/kubernetes/pkg/util/wait"
 
 	projectapi "github.com/openshift/kube-projects/pkg/project/api"
 	projectutil "github.com/openshift/kube-projects/pkg/project/util"
@@ -28,14 +30,14 @@ type REST struct {
 
 	authorizer authorizer.Authorizer
 
-	privilegedKubeClient internalclientset.Interface
+	kubeClient internalclientset.Interface
 }
 
-func NewREST(message string, authorizer authorizer.Authorizer, privilegedKubeClient internalclientset.Interface) *REST {
+func NewREST(message string, authorizer authorizer.Authorizer, kubeClient internalclientset.Interface) *REST {
 	return &REST{
-		message:              message,
-		authorizer:           authorizer,
-		privilegedKubeClient: privilegedKubeClient,
+		message:    message,
+		authorizer: authorizer,
+		kubeClient: kubeClient,
 	}
 }
 
@@ -49,8 +51,8 @@ func (r *REST) NewList() runtime.Object {
 
 var _ = rest.Creater(&REST{})
 
-func (r *REST) Create(ctx kapi.Context, obj runtime.Object) (runtime.Object, error) {
-	userInfo, exists := kapi.UserFrom(ctx)
+func (r *REST) Create(ctx request.Context, obj runtime.Object, includeUninitialized bool) (runtime.Object, error) {
+	userInfo, exists := request.UserFrom(ctx)
 	if !exists {
 		return nil, errors.New("a user must be provided")
 	}
@@ -61,7 +63,7 @@ func (r *REST) Create(ctx kapi.Context, obj runtime.Object) (runtime.Object, err
 
 	projectRequest := obj.(*projectapi.ProjectRequest)
 
-	if _, err := r.privilegedKubeClient.Core().Namespaces().Get(projectRequest.Name, metav1.GetOptions{}); err == nil {
+	if _, err := r.kubeClient.Core().Namespaces().Get(projectRequest.Name, metav1.GetOptions{}); err == nil {
 		return nil, kapierror.NewAlreadyExists(projectapi.Resource("project"), projectRequest.Name)
 	}
 
@@ -75,7 +77,7 @@ func (r *REST) Create(ctx kapi.Context, obj runtime.Object) (runtime.Object, err
 		projectapi.ProjectDisplayName: projectRequest.DisplayName,
 		projectapi.ProjectRequester:   username,
 	}
-	resultingNamespace, err := r.privilegedKubeClient.Core().Namespaces().Create(namespace)
+	resultingNamespace, err := r.kubeClient.Core().Namespaces().Create(namespace)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("error namespace %q: %v", projectRequest.Name, err))
 		return nil, kapierror.NewInternalError(err)
@@ -87,14 +89,14 @@ func (r *REST) Create(ctx kapi.Context, obj runtime.Object) (runtime.Object, err
 	binding.Subjects = []rbac.Subject{{Kind: rbac.UserKind, Name: username}}
 	binding.RoleRef.Kind = "ClusterRole"
 	binding.RoleRef.Name = "admin"
-	if _, err := r.privilegedKubeClient.Rbac().RoleBindings(ns).Create(binding); err != nil {
+	if _, err := r.kubeClient.Rbac().RoleBindings(ns).Create(binding); err != nil {
 		utilruntime.HandleError(fmt.Errorf("error rolebinding in %q: %v", projectRequest.Name, err))
 		return nil, kapierror.NewInternalError(err)
 	}
 
 	binding.Name = projectapi.GroupName + ":admin"
 	binding.RoleRef.Name = projectapi.GroupName + ":admin"
-	if _, err := r.privilegedKubeClient.Rbac().RoleBindings(ns).Create(binding); err != nil {
+	if _, err := r.kubeClient.Rbac().RoleBindings(ns).Create(binding); err != nil {
 		utilruntime.HandleError(fmt.Errorf("error rolebinding in %q: %v", projectRequest.Name, err))
 		return nil, kapierror.NewInternalError(err)
 	}
@@ -125,7 +127,7 @@ func (r *REST) waitForAccess(namespace, username string) {
 	backoff := retry.DefaultBackoff
 	backoff.Steps = 6 // this effectively waits for 6-ish seconds
 	err := wait.ExponentialBackoff(backoff, func() (bool, error) {
-		result, err := r.privilegedKubeClient.Authorization().SubjectAccessReviews().Create(sar)
+		result, err := r.kubeClient.Authorization().SubjectAccessReviews().Create(sar)
 		if err != nil {
 			return false, err
 		}
@@ -140,8 +142,8 @@ func (r *REST) waitForAccess(namespace, username string) {
 
 var _ = rest.Lister(&REST{})
 
-func (r *REST) List(ctx kapi.Context, options *kapi.ListOptions) (runtime.Object, error) {
-	userInfo, exists := kapi.UserFrom(ctx)
+func (r *REST) List(ctx request.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
+	userInfo, exists := request.UserFrom(ctx)
 	if !exists {
 		return nil, errors.New("a user must be provided")
 	}

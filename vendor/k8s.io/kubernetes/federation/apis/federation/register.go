@@ -17,9 +17,8 @@ limitations under the License.
 package federation
 
 import (
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // GroupName is the group name use in this package
@@ -47,11 +46,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&Cluster{},
 		&ClusterList{},
-		&api.ListOptions{},
-		&api.DeleteOptions{},
 	)
 	return nil
 }
-
-func (obj *Cluster) GetObjectKind() schema.ObjectKind     { return &obj.TypeMeta }
-func (obj *ClusterList) GetObjectKind() schema.ObjectKind { return &obj.TypeMeta }

@@ -5,13 +5,16 @@ import (
 	"strconv"
 	"testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/client-go/tools/cache"
 	kapi "k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/rbac"
-	"k8s.io/kubernetes/pkg/auth/user"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/fake"
+	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
+	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	"k8s.io/kubernetes/pkg/controller"
-	"k8s.io/kubernetes/pkg/controller/informers"
-	"k8s.io/kubernetes/pkg/util/sets"
 )
 
 // common test users
@@ -69,13 +72,13 @@ func validateList(t *testing.T, lister Lister, user user.Info, expectedSet sets.
 func TestSyncNamespace(t *testing.T) {
 	namespaceList := []*kapi.Namespace{
 		{
-			ObjectMeta: kapi.ObjectMeta{Name: "foo", ResourceVersion: "1"},
+			ObjectMeta: metav1.ObjectMeta{Name: "foo", ResourceVersion: "1"},
 		},
 		{
-			ObjectMeta: kapi.ObjectMeta{Name: "bar", ResourceVersion: "2"},
+			ObjectMeta: metav1.ObjectMeta{Name: "bar", ResourceVersion: "2"},
 		},
 		{
-			ObjectMeta: kapi.ObjectMeta{Name: "car", ResourceVersion: "3"},
+			ObjectMeta: metav1.ObjectMeta{Name: "car", ResourceVersion: "3"},
 		},
 	}
 	informerFactory := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), controller.NoResyncPeriodFunc())
@@ -96,12 +99,21 @@ func TestSyncNamespace(t *testing.T) {
 		},
 	}
 
-	authorizationCache := NewAuthorizationCache(reviewer, informerFactory.Namespaces(),
-		informerFactory.ClusterRoles(), informerFactory.ClusterRoleBindings(), informerFactory.Roles(), informerFactory.RoleBindings())
+	nsIndexer := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+
+	authorizationCache := NewAuthorizationCache(
+		reviewer,
+		informerFactory.Core().InternalVersion().Namespaces(),
+		informerFactory.Rbac().InternalVersion().ClusterRoles(),
+		informerFactory.Rbac().InternalVersion().ClusterRoleBindings(),
+		informerFactory.Rbac().InternalVersion().Roles(),
+		informerFactory.Rbac().InternalVersion().RoleBindings(),
+	)
+	authorizationCache.namespaceLister = corelisters.NewNamespaceLister(nsIndexer)
 	// we prime the data we need here since we are not running reflectors
 	for _, ns := range namespaceList {
 		obj, _ := kapi.Scheme.Copy(ns)
-		authorizationCache.namespaceLister.Add(obj.(*kapi.Namespace))
+		nsIndexer.Add(obj.(*kapi.Namespace))
 	}
 	authorizationCache.skip = &neverSkipSynchronizer{}
 
@@ -138,7 +150,7 @@ func TestSyncNamespace(t *testing.T) {
 		}
 		newVersion := strconv.Itoa(oldVersion + 1)
 		namespace.ResourceVersion = newVersion
-		authorizationCache.namespaceLister.Add(namespace)
+		nsIndexer.Add(namespace)
 	}
 
 	// now refresh the cache (which is resource version aware)

@@ -5,10 +5,12 @@ items:
   kind: ServiceAccount
   metadata:
     name: apiserver
+    namespace: project-openshift-io
 - apiVersion: v1
   kind: Service
   metadata:
     name: api
+    namespace: project-openshift-io
   spec:
     ports:
     - port: 443
@@ -20,6 +22,7 @@ items:
   kind: ReplicationController
   metadata:
     name: apiserver
+    namespace: project-openshift-io
     labels:
       apiserver: "true"
   spec:
@@ -38,7 +41,7 @@ items:
           livenessProbe:
             failureThreshold: 3
             httpGet:
-              path: /version
+              path: /healthz
               port: 443
               scheme: HTTPS
             periodSeconds: 10
@@ -47,47 +50,12 @@ items:
           readinessProbe:
             failureThreshold: 3
             httpGet:
-              path: /version
+              path: /healthz
               port: 443
               scheme: HTTPS
             periodSeconds: 10
             successThreshold: 1
             timeoutSeconds: 1
-          args:
-          - "--tls-cert-file=/var/run/serving-cert/tls.crt"
-          - "--tls-private-key-file=/var/run/serving-cert/tls.key"
-          - "--tls-ca-file=/var/run/serving-ca/ca.crt"
-          - "--client-ca-file=/var/run/client-ca/ca.crt"
-          - "--requestheader-username-headers=X-Remote-User"
-          - "--requestheader-group-headers=X-Remote-Group"
-          - "--requestheader-extra-headers-prefix=X-Remote-Extra-"
-          - "--requestheader-client-ca-file=/var/run/request-header-ca/ca.crt"
           ports:
           - containerPort: 443
-          volumeMounts:
-          - mountPath: /var/run/request-header-ca
-            name: volume-request-header-ca
-          - mountPath: /var/run/client-ca
-            name: volume-client-ca
-          - mountPath: /var/run/serving-ca
-            name: volume-serving-ca
-          - mountPath: /var/run/serving-cert
-            name: volume-serving-cert
         serviceAccountName: apiserver
-        volumes:
-        - configMap:
-            defaultMode: 420
-            name: request-header-ca
-          name: volume-request-header-ca
-        - configMap:
-            defaultMode: 420
-            name: client-ca
-          name: volume-client-ca
-        - name: volume-serving-cert
-          secret:
-            defaultMode: 420
-            secretName: serving-apiserver
-        - configMap:
-            defaultMode: 420
-            name: apiserver-ca
-          name: volume-serving-ca
