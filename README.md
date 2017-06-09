@@ -6,33 +6,29 @@ A server to provide `projects` (ACL filtered view of namespaces) and `projectreq
 
 1. Start Kubernetes using the RBAC authorizer.  For testing, you can do something like: 
 ```bash
-API_HOST=<your-ip> API_HOST_IP=<your-ip> KUBE_ENABLE_CLUSTER_DNS=true ALLOW_ANY_TOKEN=true ENABLE_RBAC=true hack/local-up-cluster.sh
+ALLOW_ANY_TOKEN=true ENABLE_RBAC=true hack/local-up-cluster.sh
 ```
 
-2. Start `kubernetes-discovery`.  For testing, you can do something like:
-```bash
-API_HOST=<your-ip> API_HOST_IP=<your-ip> hack/local-up-discovery.sh
+3. 
 ```
+# create the required namespace
+kubectl create ns project-openshift-io
 
-2. 
-```
-# start the projects API server
-KUBECONFIG=/var/run/kubernetes/admin-discovery.kubeconfig hack/install.sh
+# run the project.openshift.io apiserver
+kubectl create -f https://raw.githubusercontent.com/openshift/kube-projects/master/bootstrap-resources/apiregistration.k8s.io.yaml
+kubectl create -f https://raw.githubusercontent.com/openshift/kube-projects/master/bootstrap-resources/rbac.authorization.k8s.io.yaml
+kubectl create -f https://raw.githubusercontent.com/openshift/kube-projects/master/bootstrap-resources/core.k8s.io.yaml
 
-# log into the API federator as  yourself
-# TODO requires https://github.com/openshift/origin/pull/11340
-oc login https://localhost:8444 --token deads
-
+# try as the cluster-admin and see them all
 kubectl get projects
 
-# create a new project request
-sed 's/PROJECT_NAME/my-project/g' test/artifacts/project-request.yaml | kubectl create -f -
+# try as david and see none
+kubectl get projects --as david
 
-# see the new project
-kubectl get projects
+# create a new project request as david
+# TODO make this curl a URL or something first
+sed 's/PROJECT_NAME/my-project/g' test/artifacts/project-request.yaml | kubectl create --as david -f -
 
-oc project my-project
-
-# see the service accounts
-kubectl get sa
+# see the new project as david and see your project
+kubectl get projects --as david
 ```
