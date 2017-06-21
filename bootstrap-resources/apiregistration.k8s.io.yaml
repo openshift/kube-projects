@@ -12,5 +12,5 @@ items:
       namespace: project-openshift-io
       name: api
     insecureSkipTLSVerify: true
-    groupPriority: 10000
+    groupPriorityMinimum: 10000
     versionPriority: 1
