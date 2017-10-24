@@ -1,9 +1,11 @@
-package api
+package project
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kapi "k8s.io/kubernetes/pkg/api"
 )
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ProjectList is a list of Project objects.
 type ProjectList struct {
@@ -29,6 +31,7 @@ type ProjectStatus struct {
 }
 
 // +genclient=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Project is a logical top-level container for a set of origin resources
 type Project struct {
@@ -38,6 +41,8 @@ type Project struct {
 	Spec   ProjectSpec
 	Status ProjectStatus
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type ProjectRequest struct {
 	metav1.TypeMeta

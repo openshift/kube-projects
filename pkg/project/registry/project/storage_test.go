@@ -11,7 +11,7 @@ import (
 	kapi "k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/fake"
 
-	"github.com/openshift/kube-projects/pkg/project/api"
+	"github.com/openshift/kube-projects/pkg/apis/project"
 )
 
 // mockLister returns the namespaces in the list

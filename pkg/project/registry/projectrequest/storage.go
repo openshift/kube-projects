@@ -21,7 +21,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/client/retry"
 
-	projectapi "github.com/openshift/kube-projects/pkg/project/api"
+	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
 	projectutil "github.com/openshift/kube-projects/pkg/project/util"
 )
 

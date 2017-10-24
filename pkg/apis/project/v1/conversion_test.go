@@ -7,7 +7,7 @@ import (
 	"k8s.io/kubernetes/pkg/registry/core/namespace"
 
 	// install all APIs
-	_ "github.com/openshift/kube-projects/pkg/project/api/install"
+	_ "github.com/openshift/kube-projects/pkg/apis/project/install"
 )
 
 func CheckFieldLabelConversions(t *testing.T, version, kind string, expectedLabels map[string]string, customLabels ...string) {

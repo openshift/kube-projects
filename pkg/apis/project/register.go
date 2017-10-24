@@ -1,4 +1,4 @@
-package api
+package project
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"

@@ -15,7 +15,7 @@ import (
 	kcmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 
 	"github.com/openshift/kube-projects/pkg/apiserver"
-	projectapiv1 "github.com/openshift/kube-projects/pkg/project/api/v1"
+	projectapiv1 "github.com/openshift/kube-projects/pkg/apis/project/v1"
 )
 
 const defaultConfigDir = "openshift.local.config/project-server"

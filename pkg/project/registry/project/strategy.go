@@ -7,8 +7,8 @@ import (
 	"k8s.io/apiserver/pkg/storage/names"
 	kapi "k8s.io/kubernetes/pkg/api"
 
-	"github.com/openshift/kube-projects/pkg/project/api"
-	"github.com/openshift/kube-projects/pkg/project/api/validation"
+	"github.com/openshift/kube-projects/pkg/apis/project"
+	"github.com/openshift/kube-projects/pkg/apis/project/validation"
 )
 
 // projectStrategy implements behavior for projects

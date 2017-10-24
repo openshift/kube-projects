@@ -9,8 +9,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	kubevalidation "k8s.io/kubernetes/pkg/api/validation"
 
-	"github.com/openshift/kube-projects/pkg/project/api"
-	projectapi "github.com/openshift/kube-projects/pkg/project/api"
+	"github.com/openshift/kube-projects/pkg/apis/project"
+	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
 )
 
 func ValidateProjectName(name string, prefix bool) []string {

@@ -6,8 +6,8 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	kapi "k8s.io/kubernetes/pkg/api"
 
-	projectapi "github.com/openshift/kube-projects/pkg/project/api"
-	projectvalidation "github.com/openshift/kube-projects/pkg/project/api/validation"
+	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
+	projectvalidation "github.com/openshift/kube-projects/pkg/apis/project/validation"
 )
 
 type strategy struct {

@@ -20,7 +20,7 @@ import (
 	listers "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	nsregistry "k8s.io/kubernetes/pkg/registry/core/namespace"
 
-	projectapi "github.com/openshift/kube-projects/pkg/project/api"
+	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
 	projectauth "github.com/openshift/kube-projects/pkg/project/auth"
 	projectutil "github.com/openshift/kube-projects/pkg/project/util"
 )

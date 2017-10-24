@@ -3,7 +3,7 @@ package util
 import (
 	kapi "k8s.io/kubernetes/pkg/api"
 
-	projectapi "github.com/openshift/kube-projects/pkg/project/api"
+	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
 )
 
 // ConvertNamespace transforms a Namespace into a Project

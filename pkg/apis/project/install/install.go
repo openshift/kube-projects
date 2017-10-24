@@ -7,8 +7,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	kapi "k8s.io/kubernetes/pkg/api"
 
-	"github.com/openshift/kube-projects/pkg/project/api"
-	"github.com/openshift/kube-projects/pkg/project/api/v1"
+	"github.com/openshift/kube-projects/pkg/apis/project"
+	"github.com/openshift/kube-projects/pkg/apis/project/v1"
 )
 
 func init() {
@@ -21,7 +21,7 @@ func Install(groupFactoryRegistry announced.APIGroupFactoryRegistry, registry *r
 			GroupName:                  api.GroupName,
 			RootScopedKinds:            sets.NewString("ProjectRequest", "Project"),
 			VersionPreferenceOrder:     []string{v1.SchemeGroupVersion.Version},
-			ImportPrefix:               "github.com/openshift/kube-projects/pkg/project/api",
+			ImportPrefix:               "github.com/openshift/kube-projects/pkg/apis/project",
 			AddInternalObjectsToScheme: api.AddToScheme,
 		},
 		announced.VersionToSchemeFunc{

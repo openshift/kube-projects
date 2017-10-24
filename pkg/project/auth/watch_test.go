@@ -13,7 +13,7 @@ import (
 	kapi "k8s.io/kubernetes/pkg/api"
 	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 
-	projectapi "github.com/openshift/kube-projects/pkg/project/api"
+	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
 )
 
 func newTestWatcher(username string, groups []string, namespaces ...*kapi.Namespace) (*userProjectWatcher, *fakeAuthCache) {

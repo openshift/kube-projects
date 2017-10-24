@@ -11,8 +11,8 @@ import (
 	kubeinformers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	rbacauthorizer "k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac"
 
-	projectapi "github.com/openshift/kube-projects/pkg/project/api"
-	projectapiv1 "github.com/openshift/kube-projects/pkg/project/api/v1"
+	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
+	projectapiv1 "github.com/openshift/kube-projects/pkg/apis/project/v1"
 	authcache "github.com/openshift/kube-projects/pkg/project/auth"
 	projectstorage "github.com/openshift/kube-projects/pkg/project/registry/project"
 	projectrequeststorage "github.com/openshift/kube-projects/pkg/project/registry/projectrequest"
