@@ -12,16 +12,16 @@ import (
 func TestValidateProject(t *testing.T) {
 	testCases := []struct {
 		name    string
-		project api.Project
+		project project.Project
 		numErrs int
 	}{
 		{
 			name: "missing id",
-			project: api.Project{
+			project: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						api.ProjectDescription: "This is a description",
-						api.ProjectDisplayName: "hi",
+						project.ProjectDescription: "This is a description",
+						project.ProjectDisplayName: "hi",
 					},
 				},
 			},
@@ -30,12 +30,12 @@ func TestValidateProject(t *testing.T) {
 		},
 		{
 			name: "invalid id",
-			project: api.Project{
+			project: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "141-.124.$",
 					Annotations: map[string]string{
-						api.ProjectDescription: "This is a description",
-						api.ProjectDisplayName: "hi",
+						project.ProjectDescription: "This is a description",
+						project.ProjectDisplayName: "hi",
 					},
 				},
 			},
@@ -44,7 +44,7 @@ func TestValidateProject(t *testing.T) {
 		},
 		{
 			name: "invalid id uppercase",
-			project: api.Project{
+			project: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "AA",
 				},
@@ -53,7 +53,7 @@ func TestValidateProject(t *testing.T) {
 		},
 		{
 			name: "valid id leading number",
-			project: api.Project{
+			project: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "11",
 				},
@@ -62,7 +62,7 @@ func TestValidateProject(t *testing.T) {
 		},
 		{
 			name: "invalid id for create (< 2 characters)",
-			project: api.Project{
+			project: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "h",
 				},
@@ -71,7 +71,7 @@ func TestValidateProject(t *testing.T) {
 		},
 		{
 			name: "valid id for create (2+ characters)",
-			project: api.Project{
+			project: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "hi",
 				},
@@ -80,7 +80,7 @@ func TestValidateProject(t *testing.T) {
 		},
 		{
 			name: "invalid id internal dots",
-			project: api.Project{
+			project: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "1.a.1",
 				},
@@ -89,13 +89,13 @@ func TestValidateProject(t *testing.T) {
 		},
 		{
 			name: "has namespace",
-			project: api.Project{
+			project: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
 					Namespace: "foo",
 					Annotations: map[string]string{
-						api.ProjectDescription: "This is a description",
-						api.ProjectDisplayName: "hi",
+						project.ProjectDescription: "This is a description",
+						project.ProjectDisplayName: "hi",
 					},
 				},
 			},
@@ -104,13 +104,13 @@ func TestValidateProject(t *testing.T) {
 		},
 		{
 			name: "invalid display name",
-			project: api.Project{
+			project: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
 					Namespace: "",
 					Annotations: map[string]string{
-						api.ProjectDescription: "This is a description",
-						api.ProjectDisplayName: "h\t\ni",
+						project.ProjectDescription: "This is a description",
+						project.ProjectDisplayName: "h\t\ni",
 					},
 				},
 			},
@@ -119,12 +119,12 @@ func TestValidateProject(t *testing.T) {
 		},
 		{
 			name: "valid node selector",
-			project: api.Project{
+			project: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
 					Namespace: "",
 					Annotations: map[string]string{
-						api.ProjectNodeSelector: "infra=true, env = test",
+						project.ProjectNodeSelector: "infra=true, env = test",
 					},
 				},
 			},
@@ -132,12 +132,12 @@ func TestValidateProject(t *testing.T) {
 		},
 		// {
 		// 	name: "invalid node selector",
-		// 	project: api.Project{
+		// 	project: project.Project{
 		// 		ObjectMeta: metav1.ObjectMeta{
 		// 			Name:      "foo",
 		// 			Namespace: "",
 		// 			Annotations: map[string]string{
-		// 				api.ProjectNodeSelector: "infra, env = $test",
+		// 				project.ProjectNodeSelector: "infra, env = $test",
 		// 			},
 		// 		},
 		// 	},
@@ -153,12 +153,12 @@ func TestValidateProject(t *testing.T) {
 		}
 	}
 
-	project := api.Project{
+	project := project.Project{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "foo",
 			Annotations: map[string]string{
-				api.ProjectDescription: "This is a description",
-				api.ProjectDisplayName: "hi",
+				project.ProjectDescription: "This is a description",
+				project.ProjectDisplayName: "hi",
 			},
 		},
 	}
@@ -171,106 +171,106 @@ func TestValidateProject(t *testing.T) {
 func TestValidateProjectUpdate(t *testing.T) {
 	// Ensure we can update projects with short names, to make sure we can
 	// proxy updates to namespaces created outside project validation
-	project := &api.Project{
+	projectObj := &project.Project{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "project-name",
 			ResourceVersion: "1",
 			Annotations: map[string]string{
-				api.ProjectDescription:  "This is a description",
-				api.ProjectDisplayName:  "display name",
-				api.ProjectNodeSelector: "infra=true, env = test",
+				project.ProjectDescription:  "This is a description",
+				project.ProjectDisplayName:  "display name",
+				project.ProjectNodeSelector: "infra=true, env = test",
 			},
 			Labels: map[string]string{"label-name": "value"},
 		},
 	}
-	updateDisplayname := &api.Project{
+	updateDisplayname := &project.Project{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "project-name",
 			ResourceVersion: "1",
 			Annotations: map[string]string{
-				api.ProjectDescription:  "This is a description",
-				api.ProjectDisplayName:  "display name change",
-				api.ProjectNodeSelector: "infra=true, env = test",
+				project.ProjectDescription:  "This is a description",
+				project.ProjectDisplayName:  "display name change",
+				project.ProjectNodeSelector: "infra=true, env = test",
 			},
 			Labels: map[string]string{"label-name": "value"},
 		},
 	}
 
-	errs := ValidateProjectUpdate(updateDisplayname, project)
+	errs := ValidateProjectUpdate(updateDisplayname, projectObj)
 	if len(errs) > 0 {
 		t.Fatalf("Expected no errors, got %v", errs)
 	}
 
 	errorCases := map[string]struct {
-		A api.Project
+		A project.Project
 		T field.ErrorType
 		F string
 	}{
 		"change name": {
-			A: api.Project{
+			A: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "different",
 					ResourceVersion: "1",
-					Annotations:     project.Annotations,
-					Labels:          project.Labels,
+					Annotations:     projectObj.Annotations,
+					Labels:          projectObj.Labels,
 				},
 			},
 			T: field.ErrorTypeInvalid,
 			F: "metadata.name",
 		},
 		"invalid displayname": {
-			A: api.Project{
+			A: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "project-name",
 					ResourceVersion: "1",
 					Annotations: map[string]string{
-						api.ProjectDescription:  "This is a description",
-						api.ProjectDisplayName:  "display name\n",
-						api.ProjectNodeSelector: "infra=true, env = test",
+						project.ProjectDescription:  "This is a description",
+						project.ProjectDisplayName:  "display name\n",
+						project.ProjectNodeSelector: "infra=true, env = test",
 					},
-					Labels: project.Labels,
+					Labels: projectObj.Labels,
 				},
 			},
 			T: field.ErrorTypeInvalid,
-			F: "metadata.annotations[" + api.ProjectDisplayName + "]",
+			F: "metadata.annotations[" + project.ProjectDisplayName + "]",
 		},
 		"updating disallowed annotation": {
-			A: api.Project{
+			A: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "project-name",
 					ResourceVersion: "1",
 					Annotations: map[string]string{
-						api.ProjectDescription:  "This is a description",
-						api.ProjectDisplayName:  "display name",
-						api.ProjectNodeSelector: "infra=true, env = test2",
+						project.ProjectDescription:  "This is a description",
+						project.ProjectDisplayName:  "display name",
+						project.ProjectNodeSelector: "infra=true, env = test2",
 					},
-					Labels: project.Labels,
+					Labels: projectObj.Labels,
 				},
 			},
 			T: field.ErrorTypeInvalid,
 			F: "metadata.annotations[openshift.io/node-selector]",
 		},
 		"delete annotation": {
-			A: api.Project{
+			A: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "project-name",
 					ResourceVersion: "1",
 					Annotations: map[string]string{
-						api.ProjectDescription: "This is a description",
-						api.ProjectDisplayName: "display name",
+						project.ProjectDescription: "This is a description",
+						project.ProjectDisplayName: "display name",
 					},
-					Labels: project.Labels,
+					Labels: projectObj.Labels,
 				},
 			},
 			T: field.ErrorTypeInvalid,
 			F: "metadata.annotations[openshift.io/node-selector]",
 		},
 		"updating label": {
-			A: api.Project{
+			A: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "project-name",
 					ResourceVersion: "1",
-					Annotations:     project.Annotations,
+					Annotations:     projectObj.Annotations,
 					Labels:          map[string]string{"label-name": "diff"},
 				},
 			},
@@ -278,11 +278,11 @@ func TestValidateProjectUpdate(t *testing.T) {
 			F: "metadata.labels[label-name]",
 		},
 		"deleting label": {
-			A: api.Project{
+			A: project.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "project-name",
 					ResourceVersion: "1",
-					Annotations:     project.Annotations,
+					Annotations:     projectObj.Annotations,
 				},
 			},
 			T: field.ErrorTypeInvalid,
@@ -290,7 +290,7 @@ func TestValidateProjectUpdate(t *testing.T) {
 		},
 	}
 	for k, v := range errorCases {
-		errs := ValidateProjectUpdate(&v.A, project)
+		errs := ValidateProjectUpdate(&v.A, projectObj)
 		if len(errs) == 0 {
 			t.Errorf("expected failure %s for %v", k, v.A)
 			continue

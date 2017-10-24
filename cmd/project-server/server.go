@@ -11,7 +11,6 @@ import (
 	// install all APIs
 	_ "github.com/openshift/kube-projects/pkg/apis/project/install"
 	_ "github.com/openshift/kube-projects/pkg/project/auth"
-	_ "k8s.io/kubernetes/pkg/api/install"
 )
 
 func main() {

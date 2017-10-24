@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	kapierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -14,19 +16,17 @@ import (
 	utilwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/apiserver/pkg/authentication/user"
+	corev1informers "k8s.io/client-go/informers/core/v1"
+	rbacv1informers "k8s.io/client-go/informers/rbac/v1"
+	corev1listers "k8s.io/client-go/listers/core/v1"
+	rbacv1listers "k8s.io/client-go/listers/rbac/v1"
 	"k8s.io/client-go/tools/cache"
-	kapi "k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apis/rbac"
-	kubecoreinformers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion/core/internalversion"
-	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion/rbac/internalversion"
-	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
-	rbaclisters "k8s.io/kubernetes/pkg/client/listers/rbac/internalversion"
 )
 
 // Lister enforces ability to enumerate a resource based on role
 type Lister interface {
 	// List returns the list of Namespace items that the user can access
-	List(user user.Info) (*kapi.NamespaceList, error)
+	List(user user.Info) (*v1.NamespaceList, error)
 }
 
 // subjectRecord is a cache record for the set of namespaces a subject can access
@@ -121,13 +121,13 @@ type AuthorizationCache struct {
 	// allKnownNamespaces we track all the known namespaces, so we can detect deletes.
 	// TODO remove this in favor of a list/watch mechanism for projects
 	allKnownNamespaces        sets.String
-	namespaceLister           corelisters.NamespaceLister
+	namespaceLister           corev1listers.NamespaceLister
 	lastSyncResourceVersioner LastSyncResourceVersioner
 
-	clusterRoleLister               rbaclisters.ClusterRoleLister
-	clusterRoleBindingLister        rbaclisters.ClusterRoleBindingLister
-	roleLister                      rbaclisters.RoleLister
-	roleBindingLister               rbaclisters.RoleBindingLister
+	clusterRoleLister               rbacv1listers.ClusterRoleLister
+	clusterRoleBindingLister        rbacv1listers.ClusterRoleBindingLister
+	roleLister                      rbacv1listers.RoleLister
+	roleBindingLister               rbacv1listers.RoleBindingLister
 	policyLastSyncResourceVersioner LastSyncResourceVersioner
 
 	reviewRecordStore       cache.Store
@@ -150,11 +150,11 @@ type AuthorizationCache struct {
 
 // NewAuthorizationCache creates a new AuthorizationCache
 func NewAuthorizationCache(reviewer Reviewer,
-	namespaceInformer kubecoreinformers.NamespaceInformer,
-	clusterRoles informers.ClusterRoleInformer,
-	clusterRoleBindings informers.ClusterRoleBindingInformer,
-	roles informers.RoleInformer,
-	roleBindings informers.RoleBindingInformer,
+	namespaceInformer corev1informers.NamespaceInformer,
+	clusterRoles rbacv1informers.ClusterRoleInformer,
+	clusterRoleBindings rbacv1informers.ClusterRoleBindingInformer,
+	roles rbacv1informers.RoleInformer,
+	roleBindings rbacv1informers.RoleBindingInformer,
 ) *AuthorizationCache {
 
 	result := &AuthorizationCache{
@@ -383,13 +383,13 @@ func (ac *AuthorizationCache) syncRequest(request *reviewRequest, userSubjectRec
 	groups := []string{}
 	for _, subject := range subjects {
 		switch subject.Kind {
-		case rbac.UserKind:
+		case rbacv1.UserKind:
 			users = append(users, subject.Name)
 
-		case rbac.GroupKind:
+		case rbacv1.GroupKind:
 			groups = append(groups, subject.Name)
 
-		case rbac.ServiceAccountKind:
+		case rbacv1.ServiceAccountKind:
 			// default the namespace to namespace we're working in if its available.  This allows rolebindings that reference
 			// SAs in th local namespace to avoid having to qualify them.
 			saNamespace := namespace
@@ -425,7 +425,7 @@ func (ac *AuthorizationCache) syncRequest(request *reviewRequest, userSubjectRec
 }
 
 // List returns the set of namespace names the user has access to view
-func (ac *AuthorizationCache) List(userInfo user.Info) (*kapi.NamespaceList, error) {
+func (ac *AuthorizationCache) List(userInfo user.Info) (*v1.NamespaceList, error) {
 	keys := sets.String{}
 	user := userInfo.GetName()
 	groups := userInfo.GetGroups()
@@ -444,7 +444,7 @@ func (ac *AuthorizationCache) List(userInfo user.Info) (*kapi.NamespaceList, err
 		}
 	}
 
-	namespaceList := &kapi.NamespaceList{}
+	namespaceList := &v1.NamespaceList{}
 	for key := range keys {
 		namespace, err := ac.namespaceLister.Get(key)
 		if kapierrors.IsNotFound(err) {

@@ -6,6 +6,9 @@ import (
 
 	"github.com/golang/glog"
 
+	authorizationv1 "k8s.io/api/authorization/v1"
+	"k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	kapierror "k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,11 +18,8 @@ import (
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
-	kapi "k8s.io/kubernetes/pkg/api"
-	authorizationapi "k8s.io/kubernetes/pkg/apis/authorization"
-	"k8s.io/kubernetes/pkg/apis/rbac"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	"k8s.io/kubernetes/pkg/client/retry"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 
 	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
 	projectutil "github.com/openshift/kube-projects/pkg/project/util"
@@ -30,10 +30,10 @@ type REST struct {
 
 	authorizer authorizer.Authorizer
 
-	kubeClient internalclientset.Interface
+	kubeClient kubernetes.Interface
 }
 
-func NewREST(message string, authorizer authorizer.Authorizer, kubeClient internalclientset.Interface) *REST {
+func NewREST(message string, authorizer authorizer.Authorizer, kubeClient kubernetes.Interface) *REST {
 	return &REST{
 		message:    message,
 		authorizer: authorizer,
@@ -70,7 +70,7 @@ func (r *REST) Create(ctx request.Context, obj runtime.Object, includeUninitiali
 	ns := projectRequest.Name
 	username := userInfo.GetName()
 
-	namespace := &kapi.Namespace{}
+	namespace := &v1.Namespace{}
 	namespace.Name = ns
 	namespace.Annotations = map[string]string{
 		projectapi.ProjectDescription: projectRequest.Description,
@@ -83,10 +83,10 @@ func (r *REST) Create(ctx request.Context, obj runtime.Object, includeUninitiali
 		return nil, kapierror.NewInternalError(err)
 	}
 
-	binding := &rbac.RoleBinding{}
+	binding := &rbacv1.RoleBinding{}
 	binding.Name = "admin"
 	binding.Namespace = ns
-	binding.Subjects = []rbac.Subject{{Kind: rbac.UserKind, Name: username}}
+	binding.Subjects = []rbacv1.Subject{{Kind: rbacv1.UserKind, Name: username}}
 	binding.RoleRef.Kind = "ClusterRole"
 	binding.RoleRef.Name = "admin"
 	if _, err := r.kubeClient.Rbac().RoleBindings(ns).Create(binding); err != nil {
@@ -108,12 +108,12 @@ func (r *REST) Create(ctx request.Context, obj runtime.Object, includeUninitiali
 
 // waitForAccess blocks until the apiserver says the user has access to the namespace
 func (r *REST) waitForAccess(namespace, username string) {
-	sar := &authorizationapi.SubjectAccessReview{
-		Spec: authorizationapi.SubjectAccessReviewSpec{
-			ResourceAttributes: &authorizationapi.ResourceAttributes{
+	sar := &authorizationv1.SubjectAccessReview{
+		Spec: authorizationv1.SubjectAccessReviewSpec{
+			ResourceAttributes: &authorizationv1.ResourceAttributes{
 				Namespace: namespace,
 				Verb:      "get",
-				Group:     kapi.GroupName,
+				Group:     v1.GroupName,
 				Resource:  "namespaces",
 				Name:      namespace,
 			},

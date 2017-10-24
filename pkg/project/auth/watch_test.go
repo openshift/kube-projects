@@ -4,19 +4,19 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/authentication/user"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	kapi "k8s.io/kubernetes/pkg/api"
-	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 
 	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
 )
 
-func newTestWatcher(username string, groups []string, namespaces ...*kapi.Namespace) (*userProjectWatcher, *fakeAuthCache) {
+func newTestWatcher(username string, groups []string, namespaces ...*v1.Namespace) (*userProjectWatcher, *fakeAuthCache) {
 	nsIndexer := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	for _, namespace := range namespaces {
 		nsIndexer.Add(namespace)
@@ -27,7 +27,7 @@ func newTestWatcher(username string, groups []string, namespaces ...*kapi.Namesp
 }
 
 type fakeAuthCache struct {
-	namespaces []*kapi.Namespace
+	namespaces []*v1.Namespace
 
 	removed []CacheWatcher
 }
@@ -36,8 +36,8 @@ func (w *fakeAuthCache) RemoveWatcher(watcher CacheWatcher) {
 	w.removed = append(w.removed, watcher)
 }
 
-func (w *fakeAuthCache) List(userInfo user.Info) (*kapi.NamespaceList, error) {
-	ret := &kapi.NamespaceList{}
+func (w *fakeAuthCache) List(userInfo user.Info) (*v1.NamespaceList, error) {
+	ret := &v1.NamespaceList{}
 	if w.namespaces != nil {
 		for i := range w.namespaces {
 			ret.Items = append(ret.Items, *w.namespaces[i])
@@ -173,10 +173,10 @@ func TestAddModifyDeleteEventsByGroup(t *testing.T) {
 	}
 }
 
-func newNamespaces(names ...string) []*kapi.Namespace {
-	ret := []*kapi.Namespace{}
+func newNamespaces(names ...string) []*v1.Namespace {
+	ret := []*v1.Namespace{}
 	for _, name := range names {
-		ret = append(ret, &kapi.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}})
+		ret = append(ret, &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}})
 	}
 
 	return ret

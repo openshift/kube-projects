@@ -1,13 +1,13 @@
 package util
 
 import (
-	kapi "k8s.io/kubernetes/pkg/api"
+	"k8s.io/api/core/v1"
 
 	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
 )
 
 // ConvertNamespace transforms a Namespace into a Project
-func ConvertNamespace(namespace *kapi.Namespace) *projectapi.Project {
+func ConvertNamespace(namespace *v1.Namespace) *projectapi.Project {
 	return &projectapi.Project{
 		ObjectMeta: namespace.ObjectMeta,
 		Spec: projectapi.ProjectSpec{
@@ -20,13 +20,13 @@ func ConvertNamespace(namespace *kapi.Namespace) *projectapi.Project {
 }
 
 // convertProject transforms a Project into a Namespace
-func ConvertProject(project *projectapi.Project) *kapi.Namespace {
-	namespace := &kapi.Namespace{
+func ConvertProject(project *projectapi.Project) *v1.Namespace {
+	namespace := &v1.Namespace{
 		ObjectMeta: project.ObjectMeta,
-		Spec: kapi.NamespaceSpec{
+		Spec: v1.NamespaceSpec{
 			Finalizers: project.Spec.Finalizers,
 		},
-		Status: kapi.NamespaceStatus{
+		Status: v1.NamespaceStatus{
 			Phase: project.Status.Phase,
 		},
 	}
@@ -38,7 +38,7 @@ func ConvertProject(project *projectapi.Project) *kapi.Namespace {
 }
 
 // ConvertNamespaceList transforms a NamespaceList into a ProjectList
-func ConvertNamespaceList(namespaceList *kapi.NamespaceList) *projectapi.ProjectList {
+func ConvertNamespaceList(namespaceList *v1.NamespaceList) *projectapi.ProjectList {
 	projects := &projectapi.ProjectList{}
 	for _, n := range namespaceList.Items {
 		projects.Items = append(projects.Items, *ConvertNamespace(&n))

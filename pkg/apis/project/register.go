@@ -1,9 +1,20 @@
 package project
 
 import (
+	"k8s.io/apimachinery/pkg/apimachinery/announced"
+	"k8s.io/apimachinery/pkg/apimachinery/registered"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 )
+
+var GroupFactoryRegistry = make(announced.APIGroupFactoryRegistry)
+
+var Registry = registered.NewOrDie("")
+
+var Scheme = runtime.NewScheme()
+
+var Codecs = serializer.NewCodecFactory(Scheme)
 
 const GroupName = "project.openshift.io"
 

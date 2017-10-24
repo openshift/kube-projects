@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/validation"
+	apimachineryvalidation "k8s.io/apimachinery/pkg/api/validation"
 	"k8s.io/apimachinery/pkg/api/validation/path"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	kubevalidation "k8s.io/kubernetes/pkg/api/validation"
 
 	"github.com/openshift/kube-projects/pkg/apis/project"
 	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
@@ -22,7 +22,7 @@ func ValidateProjectName(name string, prefix bool) []string {
 		return []string{"must be at least 2 characters long"}
 	}
 
-	if reasons := kubevalidation.ValidateNamespaceName(name, false); len(reasons) != 0 {
+	if reasons := apimachineryvalidation.ValidateNamespaceName(name, false); len(reasons) != 0 {
 		return reasons
 	}
 	return nil
@@ -31,7 +31,7 @@ func ValidateProjectName(name string, prefix bool) []string {
 // ValidateProject tests required fields for a Project.
 // This should only be called when creating a project (not on update),
 // since its name validation is more restrictive than default namespace name validation
-func ValidateProject(project *api.Project) field.ErrorList {
+func ValidateProject(project *project.Project) field.ErrorList {
 	result := validation.ValidateObjectMeta(&project.ObjectMeta, false, ValidateProjectName, field.NewPath("metadata"))
 
 	if !validateNoNewLineOrTab(project.Annotations[projectapi.ProjectDisplayName]) {
@@ -48,7 +48,7 @@ func validateNoNewLineOrTab(s string) bool {
 }
 
 // ValidateProjectUpdate tests to make sure a project update can be applied.  Modifies newProject with immutable fields.
-func ValidateProjectUpdate(newProject *api.Project, oldProject *api.Project) field.ErrorList {
+func ValidateProjectUpdate(newProject *project.Project, oldProject *project.Project) field.ErrorList {
 	allErrs := validation.ValidateObjectMetaUpdate(&newProject.ObjectMeta, &oldProject.ObjectMeta, field.NewPath("metadata"))
 	allErrs = append(allErrs, ValidateProject(newProject)...)
 
@@ -93,8 +93,8 @@ func ValidateProjectUpdate(newProject *api.Project, oldProject *api.Project) fie
 	return allErrs
 }
 
-func ValidateProjectRequest(request *api.ProjectRequest) field.ErrorList {
-	project := &api.Project{}
+func ValidateProjectRequest(request *project.ProjectRequest) field.ErrorList {
+	project := &project.Project{}
 	project.ObjectMeta = request.ObjectMeta
 
 	return ValidateProject(project)
