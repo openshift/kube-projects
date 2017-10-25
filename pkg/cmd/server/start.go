@@ -9,13 +9,11 @@ import (
 	utilwait "k8s.io/apimachinery/pkg/util/wait"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	"k8s.io/client-go/rest"
-	kapi "k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	kcmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 
+	"github.com/golang/glog"
+	"github.com/openshift/kube-projects/pkg/apis/project"
+	projectapiv1 "github.com/openshift/kube-projects/pkg/apis/project/v1"
 	"github.com/openshift/kube-projects/pkg/apiserver"
-	projectapiv1 "github.com/openshift/kube-projects/pkg/project/api/v1"
 )
 
 const defaultConfigDir = "openshift.local.config/project-server"
@@ -29,7 +27,7 @@ const startLong = `Start an API server hosting the project.openshift.io API.`
 // NewCommandStartMaster provides a CLI handler for 'start master' command
 func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
 	o := &ProjectServerOptions{
-		RecommendedOptions: genericoptions.NewRecommendedOptions("kube-projects.openshift.io", kapi.Scheme, kapi.Codecs.LegacyCodec(projectapiv1.SchemeGroupVersion)),
+		RecommendedOptions: genericoptions.NewRecommendedOptions("kube-projects.openshift.io", project.Codecs.LegacyCodec(projectapiv1.SchemeGroupVersion)),
 	}
 
 	cmd := &cobra.Command{
@@ -39,9 +37,15 @@ func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
 		Run: func(c *cobra.Command, args []string) {
 			fmt.Printf("Starting\n")
 
-			kcmdutil.CheckErr(o.Complete())
-			kcmdutil.CheckErr(o.Validate(args))
-			kcmdutil.CheckErr(o.RunProjectServer())
+			if err := o.Complete(); err != nil {
+				glog.Fatal(err)
+			}
+			if err := o.Validate(args); err != nil {
+				glog.Fatal(err)
+			}
+			if err := o.RunProjectServer(); err != nil {
+				glog.Fatal(err)
+			}
 		},
 	}
 
@@ -64,24 +68,13 @@ func (o ProjectServerOptions) RunProjectServer() error {
 		return fmt.Errorf("error creating self-signed certificates: %v", err)
 	}
 
-	genericAPIServerConfig := genericapiserver.NewConfig(kapi.Codecs)
+	genericAPIServerConfig := genericapiserver.NewRecommendedConfig(project.Codecs)
 	if err := o.RecommendedOptions.ApplyTo(genericAPIServerConfig); err != nil {
-		return err
-	}
-
-	// read the kubeconfig file to use for proxying requests
-	kubeClientConfig, err := rest.InClusterConfig()
-	if err != nil {
-		return err
-	}
-	internalclientset, err := internalclientset.NewForConfig(kubeClientConfig)
-	if err != nil {
 		return err
 	}
 
 	config := apiserver.Config{
 		GenericConfig: genericAPIServerConfig,
-		KubeClient:    internalclientset,
 	}
 
 	server, err := config.Complete().New()

@@ -3,6 +3,7 @@ package project
 import (
 	"fmt"
 
+	"k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -13,21 +14,21 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/storage"
-	kapi "k8s.io/kubernetes/pkg/api"
-	coreclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
-	listers "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
-	nsregistry "k8s.io/kubernetes/pkg/registry/core/namespace"
+	apistorage "k8s.io/apiserver/pkg/storage"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	corev1listers "k8s.io/client-go/listers/core/v1"
 
-	projectapi "github.com/openshift/kube-projects/pkg/project/api"
+	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
 	projectauth "github.com/openshift/kube-projects/pkg/project/auth"
 	projectutil "github.com/openshift/kube-projects/pkg/project/util"
 )
 
 type REST struct {
 	// client can modify Kubernetes namespaces
-	client coreclient.NamespaceInterface
+	client corev1client.NamespaceInterface
 	// lister can enumerate project lists that enforce policy
 	lister projectauth.Lister
 	// Allows extended behavior during creation, required
@@ -36,11 +37,11 @@ type REST struct {
 	updateStrategy rest.RESTUpdateStrategy
 
 	authCache *projectauth.AuthorizationCache
-	nsLister  listers.NamespaceLister
+	nsLister  corev1listers.NamespaceLister
 }
 
 // NewREST returns a RESTStorage object that will work against Project resources
-func NewREST(client coreclient.NamespaceInterface, lister projectauth.Lister, authCache *projectauth.AuthorizationCache, nsLister listers.NamespaceLister) *REST {
+func NewREST(client corev1client.NamespaceInterface, lister projectauth.Lister, authCache *projectauth.AuthorizationCache, nsLister corev1listers.NamespaceLister) *REST {
 	return &REST{
 		client:         client,
 		lister:         lister,
@@ -74,12 +75,12 @@ func (s *REST) List(ctx request.Context, options *metainternalversion.ListOption
 	if err != nil {
 		return nil, err
 	}
-	m := nsregistry.MatchNamespace(ListOptionsToSelectors(options))
+	m := MatchNamespace(ListOptionsToSelectors(options))
 	list, err := filterList(namespaceList, m, nil)
 	if err != nil {
 		return nil, err
 	}
-	return projectutil.ConvertNamespaceList(list.(*kapi.NamespaceList)), nil
+	return projectutil.ConvertNamespaceList(list.(*v1.NamespaceList)), nil
 }
 
 func (s *REST) Watch(ctx request.Context, options *metav1.ListOptions) (watch.Interface, error) {
@@ -217,4 +218,33 @@ func ListOptionsToSelectors(options *metainternalversion.ListOptions) (labels.Se
 		field = options.FieldSelector
 	}
 	return label, field
+}
+
+// GetAttrs returns labels and fields of a given object for filtering purposes.
+func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, bool, error) {
+	namespaceObj, ok := obj.(*v1.Namespace)
+	if !ok {
+		return nil, nil, false, fmt.Errorf("not a namespace")
+	}
+	return labels.Set(namespaceObj.Labels), NamespaceToSelectableFields(namespaceObj), namespaceObj.Initializers != nil, nil
+}
+
+// MatchNamespace returns a generic matcher for a given label and field selector.
+func MatchNamespace(label labels.Selector, field fields.Selector) apistorage.SelectionPredicate {
+	return apistorage.SelectionPredicate{
+		Label:    label,
+		Field:    field,
+		GetAttrs: GetAttrs,
+	}
+}
+
+// NamespaceToSelectableFields returns a field set that represents the object
+func NamespaceToSelectableFields(namespace *v1.Namespace) fields.Set {
+	objectMetaFieldsSet := generic.ObjectMetaFieldsSet(&namespace.ObjectMeta, false)
+	specificFieldsSet := fields.Set{
+		"status.phase": string(namespace.Status.Phase),
+		// This is a bug, but we need to support it for backward compatibility.
+		"name": namespace.Name,
+	}
+	return generic.MergeFieldsSets(objectMetaFieldsSet, specificFieldsSet)
 }

@@ -1,4 +1,4 @@
 FROM fedora
 MAINTAINER David Eads <deads@redhat.com>
-ADD project-server /
-ENTRYPOINT ["/project-server"]
+ADD kube-projects /
+ENTRYPOINT ["/kube-projects"]

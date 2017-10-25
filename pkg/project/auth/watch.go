@@ -6,14 +6,14 @@ import (
 
 	"github.com/golang/glog"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/storage"
-	kapi "k8s.io/kubernetes/pkg/api"
-	listers "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
+	corev1listers "k8s.io/client-go/listers/core/v1"
 
 	projectutil "github.com/openshift/kube-projects/pkg/project/util"
 )
@@ -28,7 +28,7 @@ type WatchableCache interface {
 	// RemoveWatcher removes a watcher
 	RemoveWatcher(CacheWatcher)
 	// List returns the set of namespace names the user has access to view
-	List(userInfo user.Info) (*kapi.NamespaceList, error)
+	List(userInfo user.Info) (*v1.NamespaceList, error)
 }
 
 // userProjectWatcher converts a native etcd watch to a watch.Interface.
@@ -56,10 +56,10 @@ type userProjectWatcher struct {
 	// Injectable for testing. Send the event down the outgoing channel.
 	emit func(watch.Event)
 
-	nsLister  listers.NamespaceLister
+	nsLister  corev1listers.NamespaceLister
 	authCache WatchableCache
 
-	initialProjects []kapi.Namespace
+	initialProjects []v1.Namespace
 	// knownProjects maps name to resourceVersion
 	knownProjects map[string]string
 }
@@ -70,7 +70,7 @@ var (
 	watchChannelHWM storage.HighWaterMark
 )
 
-func NewUserProjectWatcher(user user.Info, visibleNamespaces sets.String, nsLister listers.NamespaceLister, authCache WatchableCache, includeAllExistingProjects bool) *userProjectWatcher {
+func NewUserProjectWatcher(user user.Info, visibleNamespaces sets.String, nsLister corev1listers.NamespaceLister, authCache WatchableCache, includeAllExistingProjects bool) *userProjectWatcher {
 	namespaces, _ := authCache.List(user)
 	knownProjects := map[string]string{}
 	for _, namespace := range namespaces.Items {
@@ -78,7 +78,7 @@ func NewUserProjectWatcher(user user.Info, visibleNamespaces sets.String, nsList
 	}
 
 	// this is optional.  If they don't request it, don't include it.
-	initialProjects := []kapi.Namespace{}
+	initialProjects := []v1.Namespace{}
 	if includeAllExistingProjects {
 		initialProjects = append(initialProjects, namespaces.Items...)
 	}
@@ -123,7 +123,7 @@ func (w *userProjectWatcher) GroupMembershipChanged(namespaceName string, users,
 		select {
 		case w.cacheIncoming <- watch.Event{
 			Type:   watch.Deleted,
-			Object: projectutil.ConvertNamespace(&kapi.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}),
+			Object: projectutil.ConvertNamespace(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}),
 		}:
 		default:
 			// remove the watcher so that we wont' be notified again and block

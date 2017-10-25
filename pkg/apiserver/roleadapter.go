@@ -1,39 +1,39 @@
 package apiserver
 
 import (
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	rbacapi "k8s.io/kubernetes/pkg/apis/rbac"
-	rbaclisters "k8s.io/kubernetes/pkg/client/listers/rbac/internalversion"
+	rbacv1listers "k8s.io/client-go/listers/rbac/v1"
 )
 
 type roleGetter struct {
-	lister rbaclisters.RoleLister
+	lister rbacv1listers.RoleLister
 }
 
-func (g *roleGetter) GetRole(namespace, name string) (*rbacapi.Role, error) {
+func (g *roleGetter) GetRole(namespace, name string) (*rbacv1.Role, error) {
 	return g.lister.Roles(namespace).Get(name)
 }
 
 type roleBindingLister struct {
-	lister rbaclisters.RoleBindingLister
+	lister rbacv1listers.RoleBindingLister
 }
 
-func (l *roleBindingLister) ListRoleBindings(namespace string) ([]*rbacapi.RoleBinding, error) {
+func (l *roleBindingLister) ListRoleBindings(namespace string) ([]*rbacv1.RoleBinding, error) {
 	return l.lister.RoleBindings(namespace).List(labels.Everything())
 }
 
 type clusterRoleGetter struct {
-	lister rbaclisters.ClusterRoleLister
+	lister rbacv1listers.ClusterRoleLister
 }
 
-func (g *clusterRoleGetter) GetClusterRole(name string) (*rbacapi.ClusterRole, error) {
+func (g *clusterRoleGetter) GetClusterRole(name string) (*rbacv1.ClusterRole, error) {
 	return g.lister.Get(name)
 }
 
 type clusterRoleBindingLister struct {
-	lister rbaclisters.ClusterRoleBindingLister
+	lister rbacv1listers.ClusterRoleBindingLister
 }
 
-func (l *clusterRoleBindingLister) ListClusterRoleBindings() ([]*rbacapi.ClusterRoleBinding, error) {
+func (l *clusterRoleBindingLister) ListClusterRoleBindings() ([]*rbacv1.ClusterRoleBinding, error) {
 	return l.lister.List(labels.Everything())
 }

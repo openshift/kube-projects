@@ -4,17 +4,16 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/endpoints/request"
-	kapi "k8s.io/kubernetes/pkg/api"
 
-	projectapi "github.com/openshift/kube-projects/pkg/project/api"
-	projectvalidation "github.com/openshift/kube-projects/pkg/project/api/validation"
+	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
+	projectvalidation "github.com/openshift/kube-projects/pkg/apis/project/validation"
 )
 
 type strategy struct {
 	runtime.ObjectTyper
 }
 
-var Strategy = strategy{kapi.Scheme}
+var Strategy = strategy{projectapi.Scheme}
 
 func (strategy) PrepareForUpdate(ctx request.Context, obj, old runtime.Object) {}
 

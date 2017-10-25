@@ -5,16 +5,15 @@ import (
 	"strconv"
 	"testing"
 
+	"k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/user"
+	informers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	kapi "k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apis/rbac"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/fake"
-	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
-	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
-	"k8s.io/kubernetes/pkg/controller"
 )
 
 // common test users
@@ -43,11 +42,11 @@ var (
 
 // mockReviewer returns the specified values for each supplied resource
 type mockReviewer struct {
-	expectedResults map[string][]rbac.Subject
+	expectedResults map[string][]rbacv1.Subject
 }
 
 // Review returns the mapped review from the mock object, or an error if none exists
-func (mr *mockReviewer) Review(name string) ([]rbac.Subject, error) {
+func (mr *mockReviewer) Review(name string) ([]rbacv1.Subject, error) {
 	review := mr.expectedResults[name]
 	if review == nil {
 		return nil, fmt.Errorf("Item %s does not exist", name)
@@ -70,7 +69,7 @@ func validateList(t *testing.T, lister Lister, user user.Info, expectedSet sets.
 }
 
 func TestSyncNamespace(t *testing.T) {
-	namespaceList := []*kapi.Namespace{
+	namespaceList := []*v1.Namespace{
 		{
 			ObjectMeta: metav1.ObjectMeta{Name: "foo", ResourceVersion: "1"},
 		},
@@ -81,21 +80,21 @@ func TestSyncNamespace(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "car", ResourceVersion: "3"},
 		},
 	}
-	informerFactory := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), controller.NoResyncPeriodFunc())
+	informerFactory := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
 
 	reviewer := &mockReviewer{
-		expectedResults: map[string][]rbac.Subject{
-			"foo": []rbac.Subject{
-				{Kind: rbac.UserKind, Name: alice.GetName()},
-				{Kind: rbac.UserKind, Name: bob.GetName()},
-				{Kind: rbac.GroupKind, Name: "employee"},
+		expectedResults: map[string][]rbacv1.Subject{
+			"foo": []rbacv1.Subject{
+				{Kind: rbacv1.UserKind, Name: alice.GetName()},
+				{Kind: rbacv1.UserKind, Name: bob.GetName()},
+				{Kind: rbacv1.GroupKind, Name: "employee"},
 			},
-			"bar": []rbac.Subject{
-				{Kind: rbac.UserKind, Name: frank.GetName()},
-				{Kind: rbac.UserKind, Name: eve.GetName()},
-				{Kind: rbac.GroupKind, Name: "random"},
+			"bar": []rbacv1.Subject{
+				{Kind: rbacv1.UserKind, Name: frank.GetName()},
+				{Kind: rbacv1.UserKind, Name: eve.GetName()},
+				{Kind: rbacv1.GroupKind, Name: "random"},
 			},
-			"car": []rbac.Subject{},
+			"car": []rbacv1.Subject{},
 		},
 	}
 
@@ -103,17 +102,16 @@ func TestSyncNamespace(t *testing.T) {
 
 	authorizationCache := NewAuthorizationCache(
 		reviewer,
-		informerFactory.Core().InternalVersion().Namespaces(),
-		informerFactory.Rbac().InternalVersion().ClusterRoles(),
-		informerFactory.Rbac().InternalVersion().ClusterRoleBindings(),
-		informerFactory.Rbac().InternalVersion().Roles(),
-		informerFactory.Rbac().InternalVersion().RoleBindings(),
+		informerFactory.Core().V1().Namespaces(),
+		informerFactory.Rbac().V1().ClusterRoles(),
+		informerFactory.Rbac().V1().ClusterRoleBindings(),
+		informerFactory.Rbac().V1().Roles(),
+		informerFactory.Rbac().V1().RoleBindings(),
 	)
 	authorizationCache.namespaceLister = corelisters.NewNamespaceLister(nsIndexer)
 	// we prime the data we need here since we are not running reflectors
 	for _, ns := range namespaceList {
-		obj, _ := kapi.Scheme.Copy(ns)
-		nsIndexer.Add(obj.(*kapi.Namespace))
+		nsIndexer.Add(ns.DeepCopy())
 	}
 	authorizationCache.skip = &neverSkipSynchronizer{}
 
@@ -126,19 +124,19 @@ func TestSyncNamespace(t *testing.T) {
 	validateList(t, authorizationCache, frank, sets.NewString("bar"))
 
 	// modify access rules
-	reviewer.expectedResults["foo"] = []rbac.Subject{
-		{Kind: rbac.UserKind, Name: bob.GetName()},
-		{Kind: rbac.GroupKind, Name: "random"},
+	reviewer.expectedResults["foo"] = []rbacv1.Subject{
+		{Kind: rbacv1.UserKind, Name: bob.GetName()},
+		{Kind: rbacv1.GroupKind, Name: "random"},
 	}
-	reviewer.expectedResults["bar"] = []rbac.Subject{
-		{Kind: rbac.UserKind, Name: alice.GetName()},
-		{Kind: rbac.UserKind, Name: eve.GetName()},
-		{Kind: rbac.GroupKind, Name: "employee"},
+	reviewer.expectedResults["bar"] = []rbacv1.Subject{
+		{Kind: rbacv1.UserKind, Name: alice.GetName()},
+		{Kind: rbacv1.UserKind, Name: eve.GetName()},
+		{Kind: rbacv1.GroupKind, Name: "employee"},
 	}
-	reviewer.expectedResults["car"] = []rbac.Subject{
-		{Kind: rbac.UserKind, Name: bob.GetName()},
-		{Kind: rbac.UserKind, Name: eve.GetName()},
-		{Kind: rbac.GroupKind, Name: "employee"},
+	reviewer.expectedResults["car"] = []rbacv1.Subject{
+		{Kind: rbacv1.UserKind, Name: bob.GetName()},
+		{Kind: rbacv1.UserKind, Name: eve.GetName()},
+		{Kind: rbacv1.GroupKind, Name: "employee"},
 	}
 
 	// modify resource version on each namespace to simulate a change had occurred to force cache refresh

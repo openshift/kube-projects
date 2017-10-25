@@ -32,13 +32,13 @@ var (
 	eventCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Subsystem: subsystem,
-			Name:      "event_count",
+			Name:      "event_total",
 			Help:      "Counter of audit events generated and sent to the audit backend.",
 		})
 	errorCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: subsystem,
-			Name:      "error_count",
+			Name:      "error_total",
 			Help: "Counter of audit events that failed to be audited properly. " +
 				"Plugin identifies the plugin affected by the error.",
 		},
@@ -47,7 +47,7 @@ var (
 	levelCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: subsystem,
-			Name:      "level_count",
+			Name:      "level_total",
 			Help:      "Counter of policy levels for audit events (1 per request).",
 		},
 		[]string{"level"},
@@ -72,7 +72,7 @@ func ObservePolicyLevel(level auditinternal.Level) {
 
 // HandlePluginError handles an error that occurred in an audit plugin. This method should only be
 // used if the error may have prevented the audit event from being properly recorded. The events are
-// modified.
+// logged to the debug log.
 func HandlePluginError(plugin string, err error, impacted ...*auditinternal.Event) {
 	// Count the error.
 	errorCounter.WithLabelValues(plugin).Add(float64(len(impacted)))
