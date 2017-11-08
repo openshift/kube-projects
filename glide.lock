@@ -1,5 +1,5 @@
 hash: 2dda8dc09ae337e2f9b13d8e07f9a60e4d30efd1342c11741ccb33f0bef7aefd
-updated: 2017-10-25T08:26:06.561998751-04:00
+updated: 2017-11-08T09:04:20.415950502-05:00
 imports:
 - name: bitbucket.org/ww/goautoneg
   version: 75cd24fc2f2c2a2088577d12123ddee5f54e0675
@@ -199,7 +199,7 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/spf13/cobra
-  version: 7b2c5ac9fc04fc5efafb60700713d4fa609b777b
+  version: b3426bbac13d7110c4d8fce456ea0012f79f3b8b
 - name: github.com/spf13/pflag
   version: 97afa5e7ca8a08a383cb259e06636b5e2cc7897f
 - name: github.com/ugorji/go
@@ -274,8 +274,9 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: 409c3b2393cd3359f275bd8b883b4d9c5aec41f6
+  version: 218912509d74a117d05a718bb926d0948e531c20
   subpackages:
+  - admission/v1alpha1
   - admissionregistration/v1alpha1
   - apps/v1
   - apps/v1beta1
@@ -302,7 +303,7 @@ imports:
   - storage/v1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: e9a29eff7d472df0f7da9ead5ab59b74e74a07ec
+  version: 18a564baac720819100827c16fdebcadb05b2d0d
   subpackages:
   - pkg/api/equality
   - pkg/api/errors
@@ -359,13 +360,14 @@ imports:
   - third_party/forked/golang/netutil
   - third_party/forked/golang/reflect
 - name: k8s.io/apiserver
-  version: d299c880c4e33854f8c45bdd7ab599fb54cbe575
+  version: 7001bc4df8883d4a0ec84cd4b2117655a0009b6c
   subpackages:
   - pkg/admission
   - pkg/admission/configuration
   - pkg/admission/initializer
   - pkg/admission/plugin/initialization
   - pkg/admission/plugin/namespace/lifecycle
+  - pkg/admission/plugin/webhook/webhook
   - pkg/apis/apiserver
   - pkg/apis/apiserver/install
   - pkg/apis/apiserver/v1alpha1
@@ -436,7 +438,7 @@ imports:
   - plugin/pkg/authenticator/token/webhook
   - plugin/pkg/authorizer/webhook
 - name: k8s.io/client-go
-  version: 271cb504b63ed762a3aea146bd842015da5a79c4
+  version: dbe8fe09ed1682bc26b4e55cac5ef65dcd7664e9
   subpackages:
   - discovery
   - discovery/fake
@@ -571,11 +573,11 @@ imports:
   - util/integer
   - util/retry
 - name: k8s.io/code-generator
-  version: b6644f7753f281ae6b8ef94867f84b060e2f5e59
+  version: 961bc077103364eb5bda2c40e2b560d068c9a8c6
 - name: k8s.io/gengo
   version: 70ad626ed2d7a483d89d2c4c56364d60b48ee8fc
 - name: k8s.io/kube-openapi
-  version: 61b46af70dfed79c6d24530cd23b41440a7f22a5
+  version: 53144618b7ca61a36e7598712962b21f4743fec9
   subpackages:
   - pkg/builder
   - pkg/common
