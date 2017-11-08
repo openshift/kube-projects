@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: List
 items:
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     name: project.openshift.io:admin
   rules:
   - apiGroups:
-    - "project.openshift.io"
+    - project.openshift.io
     resources:
     - projects
     verbs:
@@ -19,57 +19,57 @@ items:
     - patch
     - update
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     name: project.openshift.io:editor
   rules:
   - apiGroups:
-    - "project.openshift.io"
+    - project.openshift.io
     resources:
     - projects
     verbs:
     - get
     - list
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     name: project.openshift.io:viewer
   rules:
   - apiGroups:
-    - "project.openshift.io"
+    - project.openshift.io
     resources:
     - projects
     verbs:
     - get
     - list
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     name: project.openshift.io:basic-user
   rules:
   - apiGroups:
-    - "project.openshift.io"
+    - project.openshift.io
     resources:
     - projects
     - projectrequests
     verbs:
     - list
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     name: project.openshift.io:self-provisioner
   rules:
   - apiGroups:
-    - "project.openshift.io"
+    - project.openshift.io
     resources:
     - projectrequests
     verbs:
     - create
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRole
   metadata:
     name: project.openshift.io:apiserver
@@ -88,7 +88,7 @@ items:
     - update
     - watch
   - apiGroups:
-    - "rbac.authorization.k8s.io"
+    - rbac.authorization.k8s.io
     resources:
     - clusterroles
     - clusterrolebindings
@@ -98,7 +98,15 @@ items:
     - get
     - list
     - watch
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+  - apiGroups:
+    - admissionregistration.k8s.io
+    resources:
+    - externaladmissionhookconfigurations
+    verbs:
+    - get
+    - list
+    - watch
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRoleBinding
   metadata:
     name: project.openshift.io:system:auth-delegator
@@ -110,7 +118,7 @@ items:
   - kind: ServiceAccount
     name: apiserver
     namespace: project-openshift-io
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRoleBinding
   metadata:
     name: project.openshift.io:admin
@@ -122,7 +130,7 @@ items:
   - kind: ServiceAccount
     name: apiserver
     namespace: project-openshift-io
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRoleBinding
   metadata:
     name: project.openshift.io:project.openshift.io:admin
@@ -134,7 +142,7 @@ items:
   - kind: ServiceAccount
     name: apiserver
     namespace: project-openshift-io
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRoleBinding
   metadata:
     name: project.openshift.io:apiserver
@@ -146,7 +154,7 @@ items:
   - kind: ServiceAccount
     name: apiserver
     namespace: project-openshift-io
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRoleBinding
   metadata:
     name: project.openshift.io:self-provisioner
@@ -157,7 +165,7 @@ items:
   subjects:
   - kind: Group
     name: system:authenticated
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRoleBinding
   metadata:
     name: project.openshift.io:basic-user
@@ -170,7 +178,7 @@ items:
     name: system:authenticated
   - kind: Group
     name: system:unauthenticated
-- apiVersion: rbac.authorization.k8s.io/v1beta1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: RoleBinding
   metadata:
     name: project.openshift.io:auth-reader

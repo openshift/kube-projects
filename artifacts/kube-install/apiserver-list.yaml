@@ -18,17 +18,15 @@ items:
       targetPort: 443
     selector:
       apiserver: "true"
-- apiVersion: v1
-  kind: ReplicationController
+
+- apiVersion: extensions/v1beta1
+  kind: DaemonSet
   metadata:
     name: apiserver
     namespace: project-openshift-io
     labels:
       apiserver: "true"
   spec:
-    replicas: 1
-    selector:
-      apiserver: "true"
     template:
       metadata:
         labels:
@@ -38,6 +36,10 @@ items:
         - name: apiserver
           image: openshift/origin-kube-projects:latest
           imagePullPolicy: IfNotPresent
+          command:
+          - "/kube-projects"
+          - "--audit-log-path=-"
+          - "--v=8"
           livenessProbe:
             failureThreshold: 3
             httpGet:
@@ -59,3 +61,17 @@ items:
           ports:
           - containerPort: 443
         serviceAccountName: apiserver
+
+- apiVersion: apiregistration.k8s.io/v1beta1
+  kind: APIService
+  metadata:
+    name: v1.project.openshift.io
+  spec:
+    group: project.openshift.io
+    version: v1
+    service:
+      namespace: project-openshift-io
+      name: api
+    insecureSkipTLSVerify: true
+    groupPriorityMinimum: 10000
+    versionPriority: 1
