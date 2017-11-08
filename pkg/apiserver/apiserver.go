@@ -6,7 +6,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
-	"k8s.io/client-go/kubernetes"
+	restclient "k8s.io/client-go/rest"
 
 	projectapi "github.com/openshift/kube-projects/pkg/apis/project"
 	projectapiv1 "github.com/openshift/kube-projects/pkg/apis/project/v1"
@@ -14,6 +14,7 @@ import (
 	authcache "github.com/openshift/kube-projects/pkg/project/auth"
 	projectstorage "github.com/openshift/kube-projects/pkg/project/registry/project"
 	projectrequeststorage "github.com/openshift/kube-projects/pkg/project/registry/projectrequest"
+	"k8s.io/client-go/kubernetes"
 )
 
 type Config struct {
@@ -52,7 +53,11 @@ func (c *Config) Complete() completedConfig {
 
 // New returns a new instance of ProjectServer from the given config.
 func (c completedConfig) New() (*ProjectServer, error) {
-	kubeClient, err := kubernetes.NewForConfig(c.GenericConfig.LoopbackClientConfig)
+	kubeClientConfig, err := restclient.InClusterConfig()
+	if err != nil {
+		return nil, err
+	}
+	kubeClient, err := kubernetes.NewForConfig(kubeClientConfig)
 	if err != nil {
 		return nil, err
 	}

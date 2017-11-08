@@ -6,7 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"k8s.io/api/admission/v1alpha1"
 	utilwait "k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apiserver/pkg/admission/plugin/initialization"
+	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 
@@ -20,6 +23,8 @@ const defaultConfigDir = "openshift.local.config/project-server"
 
 type ProjectServerOptions struct {
 	RecommendedOptions *genericoptions.RecommendedOptions
+
+	AdmissionOptions *genericoptions.AdmissionOptions
 }
 
 const startLong = `Start an API server hosting the project.openshift.io API.`
@@ -28,7 +33,10 @@ const startLong = `Start an API server hosting the project.openshift.io API.`
 func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
 	o := &ProjectServerOptions{
 		RecommendedOptions: genericoptions.NewRecommendedOptions("kube-projects.openshift.io", project.Codecs.LegacyCodec(projectapiv1.SchemeGroupVersion)),
+		AdmissionOptions:   genericoptions.NewAdmissionOptions(),
 	}
+	o.RecommendedOptions.Etcd = nil
+	o.AdmissionOptions.DefaultOffPlugins = []string{initialization.PluginName, lifecycle.PluginName}
 
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -50,6 +58,7 @@ func NewCommandStartProjectServer(out io.Writer) *cobra.Command {
 	}
 
 	o.RecommendedOptions.AddFlags(cmd.Flags())
+	o.AdmissionOptions.AddFlags(cmd.Flags())
 
 	return cmd
 }
@@ -70,6 +79,17 @@ func (o ProjectServerOptions) RunProjectServer() error {
 
 	genericAPIServerConfig := genericapiserver.NewRecommendedConfig(project.Codecs)
 	if err := o.RecommendedOptions.ApplyTo(genericAPIServerConfig); err != nil {
+		return err
+	}
+
+	v1alpha1.AddToScheme(project.Scheme)
+
+	if err := o.AdmissionOptions.ApplyTo(
+		&genericAPIServerConfig.Config,
+		genericAPIServerConfig.SharedInformerFactory,
+		genericAPIServerConfig.ClientConfig,
+		project.Scheme,
+	); err != nil {
 		return err
 	}
 
