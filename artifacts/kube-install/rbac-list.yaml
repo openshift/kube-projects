@@ -101,7 +101,8 @@ items:
   - apiGroups:
     - admissionregistration.k8s.io
     resources:
-    - externaladmissionhookconfigurations
+    - validatingwebhookconfigurations
+    - mutatingwebhookconfigurations
     verbs:
     - get
     - list

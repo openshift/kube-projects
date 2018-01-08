@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/openshift/kube-projects/pkg/apis/project"
@@ -59,7 +60,7 @@ func TestListProjects(t *testing.T) {
 func TestCreateProjectBadObject(t *testing.T) {
 	storage := REST{}
 
-	obj, err := storage.Create(request.NewContext(), &project.ProjectList{}, false)
+	obj, err := storage.Create(request.NewContext(), &project.ProjectList{}, rest.ValidateAllObjectFunc, false)
 	if obj != nil {
 		t.Errorf("Expected nil, got %v", obj)
 	}
@@ -75,7 +76,7 @@ func TestCreateInvalidProject(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{"openshift.io/display-name": "h\t\ni"},
 		},
-	}, false)
+	}, rest.ValidateAllObjectFunc,false)
 	if !errors.IsInvalid(err) {
 		t.Errorf("Expected 'invalid' error, got %v", err)
 	}
@@ -86,7 +87,7 @@ func TestCreateProjectOK(t *testing.T) {
 	storage := NewREST(mockClient.Core().Namespaces(), &mockLister{}, nil, nil)
 	_, err := storage.Create(request.NewContext(), &project.Project{
 		ObjectMeta: metav1.ObjectMeta{Name: "foo"},
-	}, false)
+	}, rest.ValidateAllObjectFunc,false)
 	if err != nil {
 		t.Errorf("Unexpected non-nil error: %#v", err)
 	}

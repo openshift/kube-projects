@@ -51,7 +51,7 @@ func (r *REST) NewList() runtime.Object {
 
 var _ = rest.Creater(&REST{})
 
-func (r *REST) Create(ctx request.Context, obj runtime.Object, includeUninitialized bool) (runtime.Object, error) {
+func (r *REST) Create(ctx request.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, includeUninitialized bool) (runtime.Object, error) {
 	userInfo, exists := request.UserFrom(ctx)
 	if !exists {
 		return nil, errors.New("a user must be provided")
@@ -62,6 +62,10 @@ func (r *REST) Create(ctx request.Context, obj runtime.Object, includeUninitiali
 	}
 
 	projectRequest := obj.(*projectapi.ProjectRequest)
+
+	if err := createValidation(obj); err != nil {
+		return nil, err
+	}
 
 	if _, err := r.kubeClient.Core().Namespaces().Get(projectRequest.Name, metav1.GetOptions{}); err == nil {
 		return nil, kapierror.NewAlreadyExists(projectapi.Resource("project"), projectRequest.Name)
@@ -159,8 +163,8 @@ func (r *REST) List(ctx request.Context, options *metainternalversion.ListOption
 		ResourceRequest: true,
 		Path:            "",
 	}
-	allowed, _, _ := r.authorizer.Authorize(accessCheck)
-	if allowed {
+	decision, _, _ := r.authorizer.Authorize(accessCheck)
+	if decision == authorizer.DecisionAllow {
 		return &metav1.Status{Status: metav1.StatusSuccess}, nil
 	}
 

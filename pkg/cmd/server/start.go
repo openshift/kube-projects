@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"k8s.io/api/admission/v1alpha1"
+	"k8s.io/api/admission/v1beta1"
 	utilwait "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/admission/plugin/initialization"
 	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
@@ -82,7 +82,7 @@ func (o ProjectServerOptions) RunProjectServer() error {
 		return err
 	}
 
-	v1alpha1.AddToScheme(project.Scheme)
+	v1beta1.AddToScheme(project.Scheme)
 
 	if err := o.AdmissionOptions.ApplyTo(
 		&genericAPIServerConfig.Config,
