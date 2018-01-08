@@ -93,7 +93,7 @@ func (m *Matcher) MatchNamespaceSelector(h *v1beta1.Webhook, attr admission.Attr
 		// namespace, it is exempted from all webhooks for now.
 		// TODO: figure out a way selective exempt cluster scoped resources.
 		// Also update the comment in types.go
-		return false, nil
+		return true, nil
 	}
 	namespaceLabels, err := m.GetNamespaceLabels(attr)
 	// this means the namespace is not found, for backwards compatibility,
