@@ -3,17 +3,15 @@ import:
 - package: k8s.io/gengo
   version: master
 - package: k8s.io/code-generator
-  version: master
+  version: kubernetes-1.9.0
 - package: k8s.io/client-go
-  version: master
+  version: v6.0.0
 - package: k8s.io/apimachinery
-  version: master
-- package: k8s.io/kube-openapi
-  version: master
+  version: kubernetes-1.9.0
 - package: k8s.io/apiserver
-  version: master
+  version: kubernetes-1.9.0
 - package: k8s.io/api
-  version: master
+  version: kubernetes-1.9.0
 - package: github.com/spf13/cobra
   version: master
 - package: github.com/spf13/pflag
