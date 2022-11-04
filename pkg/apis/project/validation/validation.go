@@ -81,7 +81,7 @@ func ValidateProjectUpdate(newProject *project.Project, oldProject *project.Proj
 
 	for name, value := range newProject.Labels {
 		if value != oldProject.Labels[name] {
-			allErrs = append(allErrs, field.Invalid(field.NewPath("metadata", "labels").Key(name), value, "field is immutable, , try updating the namespace"))
+			allErrs = append(allErrs, field.Invalid(field.NewPath("metadata", "labels").Key(name), value, "field is immutable, try updating the namespace"))
 		}
 	}
 	for name, value := range oldProject.Labels {
